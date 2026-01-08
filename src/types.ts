@@ -42,10 +42,18 @@ export interface CrackOptions {
   useUtf8Filter?: boolean;
 
   /**
-   * Resume cracking from a specific room name position.
+   * Resume cracking from a specific position.
    * Useful for resuming interrupted searches.
+   * The interpretation depends on startFromType.
    */
   startFrom?: string;
+
+  /**
+   * How to interpret the startFrom value (default: 'bruteforce').
+   * - 'dictionary': startFrom is a dictionary word; resume dictionary attack from that word, then continue to brute force
+   * - 'bruteforce': startFrom is a brute-force position; skip dictionary and resume brute force from that position
+   */
+  startFromType?: 'dictionary' | 'bruteforce';
 
   /**
    * Force CPU-based cracking instead of WebGPU (default: false).
@@ -112,8 +120,15 @@ export interface CrackResult {
   /** Whether the operation was aborted */
   aborted?: boolean;
 
-  /** Position to resume from if aborted or failed */
+  /** Position to resume from if aborted or not found */
   resumeFrom?: string;
+
+  /**
+   * Type of resume position.
+   * - 'dictionary': resumeFrom is a dictionary word
+   * - 'bruteforce': resumeFrom is a brute-force position
+   */
+  resumeType?: 'dictionary' | 'bruteforce';
 
   /** Error message if an error occurred */
   error?: string;

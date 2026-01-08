@@ -154,6 +154,7 @@ export class GroupTextCracker {
     const maxLength = options?.maxLength ?? 8;
     const startingLength = options?.startingLength ?? 1;
     const useDictionary = options?.useDictionary ?? true;
+    const startFromType = options?.startFromType ?? 'bruteforce';
 
     // Decode packet
     const decoded = await this.decodePacket(packetHex);
@@ -187,17 +188,31 @@ export class GroupTextCracker {
     let totalChecked = 0;
     let lastProgressUpdate = performance.now();
 
-    // Determine starting position
+    // Determine starting position for brute force
     let startFromLength = startingLength;
     let startFromOffset = 0;
+    let dictionaryStartIndex = 0;
+    let skipDictionary = false;
+
     if (options?.startFrom) {
-      const pos = roomNameToIndex(options.startFrom);
-      if (pos) {
-        startFromLength = Math.max(startingLength, pos.length);
-        startFromOffset = pos.index + 1; // Start after the given position
-        if (startFromOffset >= countNamesForLength(startFromLength)) {
-          startFromLength++;
-          startFromOffset = 0;
+      if (startFromType === 'dictionary') {
+        // Find the word in the dictionary and start from there
+        const wordIndex = this.wordlist.indexOf(options.startFrom.toLowerCase());
+        if (wordIndex >= 0) {
+          dictionaryStartIndex = wordIndex;
+        }
+        // If word not found, start dictionary from beginning
+      } else {
+        // Brute force resume: skip dictionary entirely
+        skipDictionary = true;
+        const pos = roomNameToIndex(options.startFrom);
+        if (pos) {
+          startFromLength = Math.max(startingLength, pos.length);
+          startFromOffset = pos.index + 1; // Start after the given position
+          if (startFromOffset >= countNamesForLength(startFromLength)) {
+            startFromLength++;
+            startFromOffset = 0;
+          }
         }
       }
     }
@@ -260,8 +275,8 @@ export class GroupTextCracker {
       return { valid: true, message: result.data.message };
     };
 
-    // Phase 1: Try public key
-    if (startFromLength === 1 && startFromOffset === 0) {
+    // Phase 1: Try public key (only if not resuming)
+    if (!skipDictionary && dictionaryStartIndex === 0 && startFromLength === startingLength && startFromOffset === 0) {
       reportProgress('public-key', 0, PUBLIC_ROOM_NAME);
 
       const publicChannelHash = getChannelHash(PUBLIC_KEY);
@@ -279,13 +294,14 @@ export class GroupTextCracker {
     }
 
     // Phase 2: Dictionary attack
-    if (useDictionary && this.wordlist.length > 0 && startFromLength === 1 && startFromOffset === 0) {
-      for (let i = 0; i < this.wordlist.length; i++) {
+    if (useDictionary && !skipDictionary && this.wordlist.length > 0) {
+      for (let i = dictionaryStartIndex; i < this.wordlist.length; i++) {
         if (this.abortFlag) {
           return {
             found: false,
             aborted: true,
             resumeFrom: this.wordlist[i],
+            resumeType: 'dictionary',
           };
         }
 
@@ -329,6 +345,7 @@ export class GroupTextCracker {
           found: false,
           aborted: true,
           resumeFrom: resumePos || undefined,
+          resumeType: 'bruteforce',
         };
       }
 
@@ -342,6 +359,7 @@ export class GroupTextCracker {
             found: false,
             aborted: true,
             resumeFrom: resumePos || undefined,
+            resumeType: 'bruteforce',
           };
         }
 
@@ -420,6 +438,7 @@ export class GroupTextCracker {
     return {
       found: false,
       resumeFrom: lastPos || undefined,
+      resumeType: 'bruteforce',
     };
   }
 

@@ -4,6 +4,9 @@
  */
 
 import * as esbuild from 'esbuild';
+import { readFileSync } from 'fs';
+
+const pkg = JSON.parse(readFileSync('package.json', 'utf-8'));
 
 await esbuild.build({
   entryPoints: ['src/index.ts'],
@@ -18,7 +21,7 @@ await esbuild.build({
   legalComments: 'eof', // Preserve license comments from dependencies at end of file
   banner: {
     js: `/*!
- * MeshCore Hashtag Room Cracker v1.0.0
+ * MeshCore Hashtag Room Cracker v${pkg.version}
  * https://github.com/jkingsman/meshcore-hashtag-cracker
  *
  * Copyright (c) 2026 Jack Kingsman

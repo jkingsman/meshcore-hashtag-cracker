@@ -50,6 +50,7 @@ interface CrackOptions {
   validSeconds?: number;        // Timestamp validity window in seconds (default: 2592000 = 30 days)
   useUtf8Filter?: boolean;      // Filter invalid UTF-8 (default: true)
   startFrom?: string;           // Resume from position
+  startFromType?: 'dictionary' | 'bruteforce'; // Type of resume position (default: 'bruteforce')
   forceCpu?: boolean;           // Force CPU-based cracking (default: false)
 }
 ```
@@ -64,6 +65,7 @@ interface CrackResult {
   decryptedMessage?: string;  // Decrypted message
   aborted?: boolean;          // Was operation aborted
   resumeFrom?: string;        // Position for resume
+  resumeType?: 'dictionary' | 'bruteforce'; // Type of resume position
   error?: string;             // Error message
 }
 ```
@@ -162,8 +164,11 @@ const result = await cracker.crack(packetHex, { maxLength: 6 });
 
 ### Aborting and Resuming
 
+The cracker tracks where it stopped and provides resume information:
+
 ```typescript
 const cracker = new GroupTextCracker();
+await cracker.loadWordlist('/words.txt');
 
 // Start cracking (in background)
 const crackPromise = cracker.crack(packetHex, { maxLength: 8 }, (progress) => {
@@ -176,13 +181,21 @@ const crackPromise = cracker.crack(packetHex, { maxLength: 8 }, (progress) => {
 const result = await crackPromise;
 
 if (result.aborted && result.resumeFrom) {
-  // Resume later from where we left off
+  // Resume from where we left off, preserving the phase (dictionary or brute force)
   const resumed = await cracker.crack(packetHex, {
     maxLength: 8,
     startFrom: result.resumeFrom,
+    startFromType: result.resumeType, // 'dictionary' or 'bruteforce'
   });
 }
 ```
+
+**Resume behavior:**
+
+- `startFromType: 'dictionary'` - Resume from a dictionary word, then continue to brute force after dictionary completes
+- `startFromType: 'bruteforce'` (default) - Skip dictionary entirely, resume brute force from the specified position
+
+If you abort during the dictionary phase, `resumeType` will be `'dictionary'` and `resumeFrom` will be the dictionary word where it stopped. Using these values to resume will continue the dictionary attack from that word.
 
 ## Utility Functions
 
