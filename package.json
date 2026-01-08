@@ -1,0 +1,55 @@
+{
+  "name": "meshcore-hashtag-cracker",
+  "version": "1.0.0",
+  "description": "MeshCore hashtag Grouptext packet brute-forcer",
+  "author": "Jack Kingsman",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jkingsman/meshcore-hashtag-cracker.git"
+  },
+  "homepage": "https://github.com/jkingsman/meshcore-hashtag-cracker#readme",
+  "bugs": {
+    "url": "https://github.com/jkingsman/meshcore-hashtag-cracker/issues"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "dependencies": {
+    "@michaelhart/meshcore-decoder": "^0.2.7",
+    "crypto-js": "^4.2.0"
+  },
+  "devDependencies": {
+    "@types/crypto-js": "^4.2.2",
+    "@webgpu/types": "^0.1.68",
+    "typescript": "^5.7.2",
+    "vitest": "^4.0.16"
+  },
+  "keywords": [
+    "meshcore",
+    "cracker",
+    "brute-force",
+    "webgpu"
+  ],
+  "directories": {
+    "test": "test"
+  }
+}

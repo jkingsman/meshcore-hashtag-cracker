@@ -1,0 +1,111 @@
+# MeshCore GroupText Hashtag Room Cracker
+
+Standalone library for cracking MeshCore GroupText packets from hashtag rooms using WebGPU-accelerated brute force (with fallbacks for our non-GPU brethren).
+
+**Note:** This tool is designed exclusively for cracking public hashtag rooms (e.g., `#general`, `#test`). It does not support private rooms or other MeshCore encryption schemes (or, rather, it will attempt to crack them, but nearly certainly fail)
+
+This is an LLM-developed library and has borne out its correctness in various application uses, but caution should still be applied in any mission-critical contexts.
+
+## Features
+
+- WebGPU-accelerated brute force (100M+ keys/second on modern GPUs)
+- Dictionary attack support with external wordlist
+- Configurable timestamp and UTF-8 filters
+- Progress callbacks with ETA
+- Resume support for interrupted searches
+
+## Installation
+
+```bash
+npm install meshcore-cracker
+```
+
+## Usage
+
+```typescript
+import { GroupTextCracker } from 'meshcore-cracker';
+
+const cracker = new GroupTextCracker();
+
+// Example GroupText packet (hex string, no spaces or 0x prefix)
+const packetHex = '150013752F15A1BF3C018EB1FC4F26B5FAEB417BB0F1AE8FF07655484EBAA05CB9A927D689';
+
+const result = await cracker.crack(packetHex, {
+  maxLength: 6,
+});
+
+if (result.found) {
+  console.log(`Room: #${result.roomName}`);
+  console.log(`Key: ${result.key}`);
+  console.log(`Message: ${result.decryptedMessage}`);
+}
+
+cracker.destroy();
+```
+
+**Output:**
+```
+Room: #aa
+Key: e147f36926b7b509af9b41b65304dc30
+Message: foo
+```
+
+### Options
+
+```typescript
+const result = await cracker.crack(packetHex, {
+  maxLength: 8,           // Max room name length to try (default: 8)
+  startingLength: 1,      // Min room name length to try (default: 1)
+  useDictionary: true,    // Try dictionary words first (default: true)
+  useTimestampFilter: true, // Reject old timestamps (default: true)
+  validSeconds: 2592000,  // Timestamp window in seconds (default: 30 days)
+  useUtf8Filter: true,    // Reject invalid UTF-8 (default: true)
+  forceCpu: false,        // Force CPU mode, skip GPU (default: false)
+  startFrom: 'abc',       // Resume from position (optional)
+});
+```
+
+For detailed API documentation, see [API.md](./API.md).
+
+## Browser Requirements
+
+- WebGPU support (Chrome 113+, Edge 113+, or other Chromium-based browsers)
+- HTTPS connection for non-localhost hostnames (falls back gracefully with an error if WebGPU is not available)
+
+## Performance
+
+Typical performance on modern hardware:
+- **GPU (RTX 3080)**: ~500M keys/second
+- **GPU (integrated)**: ~50M keys/second
+
+Search space by room name length:
+| Length | Candidates | Time @ 100M/s |
+|--------|------------|---------------|
+| 1 | 36 | instant |
+| 2 | 1,296 | instant |
+| 3 | 47,952 | instant |
+| 4 | 1,774,224 | <1s |
+| 5 | 65,646,288 | <1s |
+| 6 | 2,428,912,656 | ~24s |
+| 7 | 89,869,768,272 | ~15min |
+| 8 | 3,325,181,426,064 | ~9h |
+
+## Development
+
+```bash
+# Install dependencies
+npm install
+
+# Build
+npm run build
+
+# Run tests
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+```
+
+## License
+
+MIT
