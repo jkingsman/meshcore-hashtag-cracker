@@ -15,8 +15,9 @@ await esbuild.build({
   target: 'es2020',
   platform: 'browser',
   minify: true,
+  legalComments: 'eof', // Preserve license comments from dependencies at end of file
   banner: {
-    js: `/**
+    js: `/*!
  * MeshCore Hashtag Room Cracker v1.0.0
  * https://github.com/jkingsman/meshcore-hashtag-cracker
  *
