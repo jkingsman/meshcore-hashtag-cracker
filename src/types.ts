@@ -120,11 +120,16 @@ export interface CrackResult {
   /** Whether the operation was aborted */
   aborted?: boolean;
 
-  /** Position to resume from if aborted or not found */
+  /**
+   * Position to resume from to continue searching.
+   * Always provided on success, abort, or not-found (not on error).
+   * Pass this as `startFrom` with the corresponding `startFromType` to skip
+   * past this result and continue searching for additional matches.
+   */
   resumeFrom?: string;
 
   /**
-   * Type of resume position.
+   * Type of resume position. Use as `startFromType` when resuming.
    * - 'dictionary': resumeFrom is a dictionary word
    * - 'bruteforce': resumeFrom is a brute-force position
    */

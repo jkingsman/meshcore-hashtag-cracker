@@ -195,17 +195,20 @@ export class GroupTextCracker {
     let skipDictionary = false;
 
     if (options?.startFrom) {
+      // Normalize to lowercase for consistent matching
+      const normalizedStartFrom = options.startFrom.toLowerCase();
+
       if (startFromType === 'dictionary') {
-        // Find the word in the dictionary and start from there
-        const wordIndex = this.wordlist.indexOf(options.startFrom.toLowerCase());
+        // Find the word in the dictionary and start AFTER it (like brute force does)
+        const wordIndex = this.wordlist.indexOf(normalizedStartFrom);
         if (wordIndex >= 0) {
-          dictionaryStartIndex = wordIndex;
+          dictionaryStartIndex = wordIndex + 1; // Start after the given word
         }
         // If word not found, start dictionary from beginning
       } else {
         // Brute force resume: skip dictionary entirely
         skipDictionary = true;
-        const pos = roomNameToIndex(options.startFrom);
+        const pos = roomNameToIndex(normalizedStartFrom);
         if (pos) {
           startFromLength = Math.max(startingLength, pos.length);
           startFromOffset = pos.index + 1; // Start after the given position
@@ -218,7 +221,12 @@ export class GroupTextCracker {
     }
 
     // Calculate total candidates for progress
+    // Include remaining dictionary words if not skipping dictionary
     let totalCandidates = 0;
+    if (useDictionary && !skipDictionary && this.wordlist.length > 0) {
+      totalCandidates += this.wordlist.length - dictionaryStartIndex;
+    }
+    // Add brute force candidates
     for (let l = startFromLength; l <= maxLength; l++) {
       totalCandidates += countNamesForLength(l);
     }
@@ -317,9 +325,14 @@ export class GroupTextCracker {
               roomName: word,
               key,
               decryptedMessage: result.message,
+              // Include resume info so caller can skip this result and continue
+              resumeFrom: word,
+              resumeType: 'dictionary',
             };
           }
         }
+
+        totalChecked++;
 
         // Progress update
         const now = performance.now();
@@ -416,6 +429,9 @@ export class GroupTextCracker {
               roomName,
               key,
               decryptedMessage: result.message,
+              // Include resume info so caller can skip this result and continue
+              resumeFrom: roomName,
+              resumeType: 'bruteforce',
             };
           }
         }

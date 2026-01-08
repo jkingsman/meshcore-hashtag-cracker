@@ -165,6 +165,162 @@ describe('GroupTextCracker', () => {
     });
   });
 
+  describe('resume functionality', () => {
+    // Test packet with multiple collisions (filters disabled):
+    // First match: #able (dictionary or brute force)
+    // Second match: #q81eb (brute force only)
+    const multiMatchPacket = '15002b77ca26cf0d63aacc998f893262ef923f71033c0cbc2de92b5189d13d45dd39141ae3';
+
+    it('should find first match (#able) in dictionary', async () => {
+      const cracker = new GroupTextCracker();
+      cracker.setWordlist(['aardvark', 'able', 'about', 'q81eb', 'zebra']);
+
+      const result = await cracker.crack(multiMatchPacket, {
+        forceCpu: true,
+        maxLength: 5,
+        useTimestampFilter: false,
+        useUtf8Filter: false,
+      });
+
+      expect(result.found).toBe(true);
+      expect(result.roomName).toBe('able');
+
+      cracker.destroy();
+    });
+
+    it('should find second match (#q81eb) when resuming from dictionary after #able', async () => {
+      const cracker = new GroupTextCracker();
+      // 'able' is before 'q81eb' in this wordlist
+      cracker.setWordlist(['aardvark', 'able', 'about', 'q81eb', 'zebra']);
+
+      // Resume from 'about' (after 'able') - should find 'q81eb' next in dictionary
+      const result = await cracker.crack(multiMatchPacket, {
+        forceCpu: true,
+        maxLength: 5,
+        startFrom: 'about',
+        startFromType: 'dictionary',
+        useTimestampFilter: false,
+        useUtf8Filter: false,
+      });
+
+      expect(result.found).toBe(true);
+      expect(result.roomName).toBe('q81eb');
+
+      cracker.destroy();
+    });
+
+    it('should find first match (#able) in brute force when no dictionary', async () => {
+      const cracker = new GroupTextCracker();
+
+      const result = await cracker.crack(multiMatchPacket, {
+        forceCpu: true,
+        maxLength: 5,
+        useDictionary: false,
+        useTimestampFilter: false,
+        useUtf8Filter: false,
+      });
+
+      expect(result.found).toBe(true);
+      expect(result.roomName).toBe('able');
+      // resumeFrom/resumeType now always provided on success for skipping false positives
+      expect(result.resumeFrom).toBe('able');
+      expect(result.resumeType).toBe('bruteforce');
+
+      cracker.destroy();
+    });
+
+    it('should find second match (#q81eb) when resuming brute force after #able', async () => {
+      const cracker = new GroupTextCracker();
+
+      // Resume from 'able' in brute force - should skip 'able' and find 'q81eb'
+      const result = await cracker.crack(multiMatchPacket, {
+        forceCpu: true,
+        maxLength: 5,
+        startFrom: 'able',
+        startFromType: 'bruteforce',
+        useTimestampFilter: false,
+        useUtf8Filter: false,
+      });
+
+      expect(result.found).toBe(true);
+      expect(result.roomName).toBe('q81eb');
+
+      cracker.destroy();
+    }, 120000); // 2 minute timeout for brute forcing 5-char name
+
+    it('should return resumeType: dictionary when match found during dictionary phase', async () => {
+      const cracker = new GroupTextCracker();
+      cracker.setWordlist(['able', 'q81eb']);
+
+      // Find 'able', then verify we can resume to find 'q81eb'
+      const firstResult = await cracker.crack(multiMatchPacket, {
+        forceCpu: true,
+        maxLength: 5,
+        useTimestampFilter: false,
+        useUtf8Filter: false,
+      });
+
+      expect(firstResult.found).toBe(true);
+      expect(firstResult.roomName).toBe('able');
+
+      // Now resume from 'able' using dictionary type - should find 'q81eb'
+      const secondResult = await cracker.crack(multiMatchPacket, {
+        forceCpu: true,
+        maxLength: 5,
+        startFrom: 'able',
+        startFromType: 'dictionary',
+        useTimestampFilter: false,
+        useUtf8Filter: false,
+      });
+
+      expect(secondResult.found).toBe(true);
+      expect(secondResult.roomName).toBe('q81eb');
+
+      cracker.destroy();
+    });
+
+    it('should skip dictionary entirely when resuming with bruteforce type', async () => {
+      const cracker = new GroupTextCracker();
+      // Put 'able' in dictionary - but brute force resume should skip dictionary
+      cracker.setWordlist(['able']);
+
+      // Resume from brute force position before 'able' but with bruteforce type
+      // Should find 'able' via brute force, not dictionary
+      const result = await cracker.crack(multiMatchPacket, {
+        forceCpu: true,
+        maxLength: 5,
+        startFrom: 'a', // Before 'able' in brute force order
+        startFromType: 'bruteforce',
+        useTimestampFilter: false,
+        useUtf8Filter: false,
+      });
+
+      expect(result.found).toBe(true);
+      expect(result.roomName).toBe('able');
+
+      cracker.destroy();
+    });
+
+    it('should not find #able when resuming brute force from after it', async () => {
+      const cracker = new GroupTextCracker();
+
+      // Resume from 'ablf' (just after 'able') - should miss 'able' but find 'q81eb'
+      const result = await cracker.crack(multiMatchPacket, {
+        forceCpu: true,
+        maxLength: 5,
+        startFrom: 'ablf',
+        startFromType: 'bruteforce',
+        useTimestampFilter: false,
+        useUtf8Filter: false,
+      });
+
+      expect(result.found).toBe(true);
+      expect(result.roomName).toBe('q81eb');
+
+      cracker.destroy();
+    }, 120000); // 2 minute timeout for brute forcing 5-char name
+  });
+
   describe('decodePacket', () => {
     it('should decode valid GroupText packet', async () => {
       const cracker = new GroupTextCracker();

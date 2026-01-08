@@ -64,7 +64,7 @@ interface CrackResult {
   key?: string;               // Encryption key (hex)
   decryptedMessage?: string;  // Decrypted message
   aborted?: boolean;          // Was operation aborted
-  resumeFrom?: string;        // Position for resume
+  resumeFrom?: string;        // Position for resume (always set on success/abort/not-found)
   resumeType?: 'dictionary' | 'bruteforce'; // Type of resume position
   error?: string;             // Error message
 }
@@ -192,10 +192,30 @@ if (result.aborted && result.resumeFrom) {
 
 **Resume behavior:**
 
-- `startFromType: 'dictionary'` - Resume from a dictionary word, then continue to brute force after dictionary completes
-- `startFromType: 'bruteforce'` (default) - Skip dictionary entirely, resume brute force from the specified position
+- `startFromType: 'dictionary'` - Resume from AFTER a dictionary word, then continue to brute force after dictionary completes
+- `startFromType: 'bruteforce'` (default) - Skip dictionary entirely, resume brute force from AFTER the specified position
 
-If you abort during the dictionary phase, `resumeType` will be `'dictionary'` and `resumeFrom` will be the dictionary word where it stopped. Using these values to resume will continue the dictionary attack from that word.
+Both resume types skip past the given position, making it easy to find additional matches.
+
+### Skipping False Positives
+
+When a match is found, `resumeFrom` and `resumeType` are always provided. This allows you to skip past false positives and continue searching:
+
+```typescript
+const result = await cracker.crack(packetHex, { maxLength: 8 });
+
+if (result.found) {
+  // Check if this is actually the room we want...
+  if (isFalsePositive(result)) {
+    // Skip this result and continue searching
+    const nextResult = await cracker.crack(packetHex, {
+      maxLength: 8,
+      startFrom: result.resumeFrom,
+      startFromType: result.resumeType,
+    });
+  }
+}
+```
 
 ## Utility Functions
 
