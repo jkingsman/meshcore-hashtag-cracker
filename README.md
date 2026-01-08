@@ -1,3 +1,5 @@
+![NPM Version](https://img.shields.io/npm/v/meshcore-hashtag-cracker)
+
 # MeshCore GroupText Hashtag Room Cracker
 
 Standalone library for cracking MeshCore GroupText packets from hashtag rooms using WebGPU-accelerated brute force (with fallbacks for our non-GPU brethren).
