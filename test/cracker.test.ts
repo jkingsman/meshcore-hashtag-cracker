@@ -229,6 +229,10 @@ describe('GroupTextCracker', () => {
       cracker.destroy();
     });
 
+    // NOTE: This test performs actual CPU brute-force cracking to find a 5-character
+    // room name collision. On slower hardware, this may take 30-60+ seconds.
+    // If this test times out, your CPU may simply be slower than expected - the
+    // library is still working correctly.
     it('should find second match (#q81eb) when resuming brute force after #able', async () => {
       const cracker = new GroupTextCracker();
 
@@ -246,7 +250,7 @@ describe('GroupTextCracker', () => {
       expect(result.roomName).toBe('q81eb');
 
       cracker.destroy();
-    }, 120000); // 2 minute timeout for brute forcing 5-char name
+    }, 120000);
 
     it('should return resumeType: dictionary when match found during dictionary phase', async () => {
       const cracker = new GroupTextCracker();
@@ -301,6 +305,10 @@ describe('GroupTextCracker', () => {
       cracker.destroy();
     });
 
+    // NOTE: This test performs actual CPU brute-force cracking to find a 5-character
+    // room name collision. On slower hardware, this may take 30-60+ seconds.
+    // If this test times out, your CPU may simply be slower than expected - the
+    // library is still working correctly.
     it('should not find #able when resuming brute force from after it', async () => {
       const cracker = new GroupTextCracker();
 
@@ -318,7 +326,7 @@ describe('GroupTextCracker', () => {
       expect(result.roomName).toBe('q81eb');
 
       cracker.destroy();
-    }, 120000); // 2 minute timeout for brute forcing 5-char name
+    }, 120000);
   });
 
   describe('decodePacket', () => {

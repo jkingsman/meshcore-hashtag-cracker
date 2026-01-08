@@ -217,6 +217,8 @@ if (result.found) {
 }
 ```
 
+**Important:** The dictionary and brute force phases are independent. A room name found in the dictionary (e.g., "able") will be encountered again during brute force. If you need to skip a false positive entirely, use `startFromType: 'bruteforce'` with the room name to skip the dictionary and start brute force after that position. If you have multiple false positives to skip, you'll need to track them yourself and continue searching when one is found again.
+
 ## Utility Functions
 
 For advanced usage, the library also exports utility functions:
