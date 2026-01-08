@@ -73,6 +73,119 @@ describe('GroupTextCracker', () => {
   // Test packet: room #aa, message "foo"
   const testPacket = '150013752F15A1BF3C018EB1FC4F26B5FAEB417BB0F1AE8FF07655484EBAA05CB9A927D689';
 
+  // Test packet: room #at, key 523cf9b2b9f5bada8f38ddd7b4920fe7
+  const atPacket = '15001c1f82f2e792c8cf2267a6f0edc8a8175219eda0c8af1bedda53d7ea9612fa957890b1ee8c8c97891e8b0e0600c01c1714f5539d87636045b059cf5dfbff1e6bcc061e';
+
+  describe('dictionary attack', () => {
+    it('should find #at via dictionary attack', async () => {
+      const cracker = new GroupTextCracker();
+      cracker.setWordlist(['apple', 'at', 'banana', 'zoo']);
+
+      const result = await cracker.crack(atPacket, {
+        forceCpu: true,
+        maxLength: 4,
+        useDictionary: true,
+        useTimestampFilter: false,
+      });
+
+      expect(result.found).toBe(true);
+      expect(result.roomName).toBe('at');
+      expect(result.key).toBe('523cf9b2b9f5bada8f38ddd7b4920fe7');
+      expect(result.resumeType).toBe('dictionary');
+
+      cracker.destroy();
+    });
+
+    it('should find #at via brute force when dictionary disabled', async () => {
+      const cracker = new GroupTextCracker();
+      cracker.setWordlist(['at']); // Has the word but disabled
+
+      const result = await cracker.crack(atPacket, {
+        forceCpu: true,
+        maxLength: 2,
+        useDictionary: false,
+        useTimestampFilter: false,
+      });
+
+      expect(result.found).toBe(true);
+      expect(result.roomName).toBe('at');
+      expect(result.resumeType).toBe('bruteforce');
+
+      cracker.destroy();
+    });
+
+    it('should not find #at when word not in dictionary and maxLength too short', async () => {
+      const cracker = new GroupTextCracker();
+      cracker.setWordlist(['apple', 'banana']); // 'at' not included
+
+      const result = await cracker.crack(atPacket, {
+        forceCpu: true,
+        maxLength: 1, // Too short for 'at' via brute force
+        useDictionary: true,
+        useTimestampFilter: false,
+      });
+
+      expect(result.found).toBe(false);
+
+      cracker.destroy();
+    });
+  });
+
+  describe('packet hex case handling', () => {
+    it('should crack with lowercase hex', async () => {
+      const cracker = new GroupTextCracker();
+      cracker.setWordlist(['aa']);
+
+      const result = await cracker.crack(testPacket.toLowerCase(), {
+        forceCpu: true,
+        maxLength: 2,
+        useTimestampFilter: false,
+      });
+
+      expect(result.found).toBe(true);
+      expect(result.roomName).toBe('aa');
+
+      cracker.destroy();
+    });
+
+    it('should crack with uppercase hex', async () => {
+      const cracker = new GroupTextCracker();
+      cracker.setWordlist(['aa']);
+
+      const result = await cracker.crack(testPacket.toUpperCase(), {
+        forceCpu: true,
+        maxLength: 2,
+        useTimestampFilter: false,
+      });
+
+      expect(result.found).toBe(true);
+      expect(result.roomName).toBe('aa');
+
+      cracker.destroy();
+    });
+
+    it('should crack with mixed case hex', async () => {
+      const cracker = new GroupTextCracker();
+      cracker.setWordlist(['aa']);
+
+      // Mix case randomly
+      const mixedCase = testPacket.split('').map((c, i) =>
+        i % 2 === 0 ? c.toLowerCase() : c.toUpperCase()
+      ).join('');
+
+      const result = await cracker.crack(mixedCase, {
+        forceCpu: true,
+        maxLength: 2,
+        useTimestampFilter: false,
+      });
+
+      expect(result.found).toBe(true);
+      expect(result.roomName).toBe('aa');
+
+      cracker.destroy();
+    });
+  });
+
   describe('crack with CPU fallback', () => {
     it('should crack #aa room with message "foo"', async () => {
       const cracker = new GroupTextCracker();

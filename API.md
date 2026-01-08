@@ -219,6 +219,20 @@ if (result.found) {
 
 **Important:** The dictionary and brute force phases are independent. A room name found in the dictionary (e.g., "able") will be encountered again during brute force. If you need to skip a false positive entirely, use `startFromType: 'bruteforce'` with the room name to skip the dictionary and start brute force after that position. If you have multiple false positives to skip, you'll need to track them yourself and continue searching when one is found again.
 
+## Built-in Wordlist
+
+The library includes a built-in English wordlist for dictionary attacks, available as a separate entry point:
+
+```typescript
+import { ENGLISH_WORDLIST } from 'meshcore-hashtag-cracker/wordlist';
+
+cracker.setWordlist(ENGLISH_WORDLIST);
+```
+
+- **370,105 words** - Filtered to valid room name format (a-z, 0-9, dashes)
+- **Tree-shakeable** - Only included in your bundle if you import it
+- **~4MB** - Consider lazy-loading for browser apps if bundle size is a concern
+
 ## Utility Functions
 
 For advanced usage, the library also exports utility functions:

@@ -11,7 +11,7 @@ This is an LLM-developed library and has borne out its correctness in various ap
 ## Features
 
 - WebGPU-accelerated brute force (100M+ keys/second on modern GPUs)
-- Dictionary attack support with external wordlist
+- Dictionary attack support with built-in English wordlist (370k words)
 - Configurable timestamp and UTF-8 filters to handle very-possible MAC collisions with sanity checks
 - Progress callbacks with ETA
 - Resume support for interrupted searches
@@ -33,6 +33,9 @@ For direct browser usage without a bundler, download [`browser/meshcore_cracker.
 <script>
   const cracker = new MeshCoreCracker.GroupTextCracker();
 
+  // Optional: load a wordlist for dictionary attack (tried before GPU brute force)
+  // await cracker.loadWordlist('https://example.com/words.txt');
+
   cracker.crack('150013752F15A1BF3C018EB1FC4F26B5FAEB417BB0F1AE8FF07655484EBAA05CB9A927D689', {
     maxLength: 4
   }).then(result => {
@@ -45,14 +48,17 @@ For direct browser usage without a bundler, download [`browser/meshcore_cracker.
 </script>
 ```
 
-The bundle exposes all exports under the `MeshCoreCracker` global object.
-
 ## Usage
 
 ```typescript
 import { GroupTextCracker } from 'meshcore-hashtag-cracker';
+// Built-in 370k word English dictionary (tree-shakeable, ~4MB)
+// Dictionary is checked BEFORE GPU brute force - a room like #football
+// takes hours to brute force but milliseconds via dictionary lookup
+import { ENGLISH_WORDLIST } from 'meshcore-hashtag-cracker/wordlist';
 
 const cracker = new GroupTextCracker();
+cracker.setWordlist(ENGLISH_WORDLIST);
 
 // Example GroupText packet (hex string, no spaces or 0x prefix)
 const packetHex = '150013752F15A1BF3C018EB1FC4F26B5FAEB417BB0F1AE8FF07655484EBAA05CB9A927D689';
@@ -83,7 +89,7 @@ Message: foo
 const result = await cracker.crack(packetHex, {
   maxLength: 8,           // Max room name length to try (default: 8)
   startingLength: 1,      // Min room name length to try (default: 1)
-  useDictionary: true,    // Try dictionary words first (default: true)
+  useDictionary: true,    // Try dictionary words first (default: true); needs cracker.setWordlist() called first
   useTimestampFilter: true, // Reject old timestamps (default: true)
   validSeconds: 2592000,  // Timestamp window in seconds (default: 30 days)
   useUtf8Filter: true,    // Reject invalid UTF-8 (default: true)

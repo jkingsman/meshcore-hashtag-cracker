@@ -156,8 +156,11 @@ export class GroupTextCracker {
     const useDictionary = options?.useDictionary ?? true;
     const startFromType = options?.startFromType ?? 'bruteforce';
 
+    // Normalize packet hex to lowercase for consistent processing
+    const normalizedPacketHex = packetHex.toLowerCase();
+
     // Decode packet
-    const decoded = await this.decodePacket(packetHex);
+    const decoded = await this.decodePacket(normalizedPacketHex);
     if (!decoded) {
       return { found: false, error: 'Invalid packet or not a GroupText packet' };
     }
