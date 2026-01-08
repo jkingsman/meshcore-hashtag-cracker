@@ -15,8 +15,9 @@
   },
   "files": [
     "dist",
+    "browser",
     "README.md",
-    "LICENSE"
+    "LICENSE.md"
   ],
   "repository": {
     "type": "git",
@@ -27,7 +28,8 @@
     "url": "https://github.com/jkingsman/meshcore-hashtag-cracker/issues"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run build:browser",
+    "build:browser": "node scripts/build-browser.js",
     "watch": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -40,6 +42,7 @@
   "devDependencies": {
     "@types/crypto-js": "^4.2.2",
     "@webgpu/types": "^0.1.68",
+    "esbuild": "^0.27.2",
     "typescript": "^5.7.2",
     "vitest": "^4.0.16"
   },

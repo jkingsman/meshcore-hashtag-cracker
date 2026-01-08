@@ -18,14 +18,39 @@ This is an LLM-developed library and has borne out its correctness in various ap
 
 ## Installation
 
+### npm
+
 ```bash
-npm install meshcore-cracker
+npm install meshcore-hashtag-cracker
 ```
+
+### Browser (Direct Include)
+
+For direct browser usage without a bundler, download [`browser/meshcore_cracker.min.js`](./browser/meshcore_cracker.min.js) and include it:
+
+```html
+<script src="meshcore_cracker.min.js"></script>
+<script>
+  const cracker = new MeshCoreCracker.GroupTextCracker();
+
+  cracker.crack('150013752F15A1BF3C018EB1FC4F26B5FAEB417BB0F1AE8FF07655484EBAA05CB9A927D689', {
+    maxLength: 4
+  }).then(result => {
+    if (result.found) {
+      console.log('Room:', result.roomName);
+      console.log('Message:', result.decryptedMessage);
+    }
+    cracker.destroy();
+  });
+</script>
+```
+
+The bundle exposes all exports under the `MeshCoreCracker` global object.
 
 ## Usage
 
 ```typescript
-import { GroupTextCracker } from 'meshcore-cracker';
+import { GroupTextCracker } from 'meshcore-hashtag-cracker';
 
 const cracker = new GroupTextCracker();
 
