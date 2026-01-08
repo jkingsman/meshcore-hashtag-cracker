@@ -12,7 +12,7 @@ This is an LLM-developed library and has borne out its correctness in various ap
 
 - WebGPU-accelerated brute force (100M+ keys/second on modern GPUs)
 - Dictionary attack support with external wordlist
-- Configurable timestamp and UTF-8 filters
+- Configurable timestamp and UTF-8 filters to handle very-possible MAC collisions with sanity checks
 - Progress callbacks with ETA
 - Resume support for interrupted searches
 

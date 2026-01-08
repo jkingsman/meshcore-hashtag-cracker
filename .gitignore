@@ -148,3 +148,6 @@ dist/
 
 # llm folders
 .claude/
+
+# test beds
+browser/testbed.html
