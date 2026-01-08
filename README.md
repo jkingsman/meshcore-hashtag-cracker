@@ -88,7 +88,8 @@ const result = await cracker.crack(packetHex, {
   validSeconds: 2592000,  // Timestamp window in seconds (default: 30 days)
   useUtf8Filter: true,    // Reject invalid UTF-8 (default: true)
   forceCpu: false,        // Force CPU mode, skip GPU (default: false)
-  startFrom: 'abc',       // Resume from position (optional)
+  startFrom: 'abc',       // Resume after this position (optional)
+  startFromType: 'bruteforce', // 'dictionary' or 'bruteforce' (default: 'bruteforce')
 });
 ```
 

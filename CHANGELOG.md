@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.2.1
+
+**Documentation:**
+- Added `startFromType` to README options example
+- Added multi-collision test packet to CLAUDE.md
+- Documented "startFrom is exclusive" behavior in gotchas
+
 ## v1.2.0
 
 **Bug fixes:**
