@@ -61,6 +61,20 @@ export interface CrackOptions {
    * Also useful for testing.
    */
   forceCpu?: boolean;
+
+  /**
+   * EXPERIMENTAL - Target GPU dispatch time in milliseconds (default: 1000).
+   *
+   * Higher values improve throughput by reducing dispatch overhead, but:
+   * - Reduce responsiveness of progress updates and abort()
+   * - May cause browser watchdog timeouts or "device lost" errors
+   * - May cause system UI stuttering during long dispatches
+   *
+   * Values up to ~10000ms may work on modern GPUs but stability varies
+   * by browser, OS, and hardware. Test thoroughly before using in production.
+   * Only applies when using GPU (not forceCpu).
+   */
+  gpuDispatchMs?: number;
 }
 
 /**

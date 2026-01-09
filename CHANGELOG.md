@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.4.0
+
+**Features:**
+- Added `gpuDispatchMs` option (experimental) for tuning GPU dispatch batch timing
+  - Default: 1000ms, tested up to 10000ms on high-end GPUs
+  - Higher values improve throughput but reduce responsiveness
+- Added `decodePacket()` method to extract packet info without cracking
+
+**Documentation:**
+- Documented `decodePacket()` method and `DecodedPacket` type in API.md
+- Fixed incorrect import path in API.md (`meshcore-cracker` → `meshcore-hashtag-cracker`)
+
 ## v1.3.0
 
 **Features:**

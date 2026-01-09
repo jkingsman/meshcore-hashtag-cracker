@@ -2,7 +2,7 @@
 
 # MeshCore GroupText Hashtag Room Cracker
 
-Standalone library for cracking MeshCore GroupText packets from hashtag rooms using WebGPU-accelerated brute force (with fallbacks for our non-GPU brethren).
+Standalone library for cracking MeshCore GroupText packets from hashtag rooms using WebGPU-accelerated brute force (with fallbacks for our non-GPU brethren and dictionary attack support).
 
 **Note:** This tool is designed exclusively for cracking public hashtag rooms (e.g., `#general`, `#test`). It does not support private rooms or other MeshCore encryption schemes (or, rather, it will attempt to crack them, but nearly certainly fail)
 

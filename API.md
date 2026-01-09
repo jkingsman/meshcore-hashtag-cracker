@@ -61,8 +61,21 @@ interface CrackOptions {
   startFrom?: string;           // Resume from position
   startFromType?: 'dictionary' | 'bruteforce'; // Type of resume position (default: 'bruteforce')
   forceCpu?: boolean;           // Force CPU-based cracking (default: false)
+  gpuDispatchMs?: number;       // EXPERIMENTAL: GPU dispatch target time (default: 1000)
 }
 ```
+
+#### gpuDispatchMs (Experimental)
+
+Target time in milliseconds for each GPU dispatch batch. The cracker auto-tunes batch sizes to hit this target. Higher values improve throughput but reduce responsiveness.
+
+**Risks of high values (>2000ms):**
+- Browser watchdog timeouts or "device lost" errors
+- System UI stuttering during dispatches
+- Delayed response to `abort()` calls
+- Progress updates less frequent
+
+Values up to ~10000ms may work on modern GPUs (tested on RTX 4080 Super), but stability varies by browser, OS, and hardware. Test thoroughly on your target environment.
 
 ### CrackResult
 
@@ -114,7 +127,7 @@ The cracker uses two filters to quickly reject false positives and improve accur
 
 `useTimestampFilter` (default: `true`)
 
-MeshCore packets contain a timestamp field. When a candidate key decrypts the packet, the timestamp filter checks whether the resulting timestamp falls within the validity window. If the decrypted timestamp is far in the past or future, it indicates the wrong key was used and the candidate is rejected. This dramatically reduces false positives since random decryption rarely produces a plausible recent timestamp.
+MeshCore packets contain a timestamp field. When a candidate key decrypts the packet, the timestamp filter checks whether the resulting timestamp falls within the validity window. If the decrypted timestamp is far in the past or future, it indicates the wrong key was used but had a MAC collision, and the candidate is rejected. This dramatically reduces false positives since random decryption rarely produces a plausible recent timestamp.
 
 The validity window can be customized using the `validSeconds` option (default: 2592000 seconds = 30 days). For example, to only accept packets from the last hour:
 
@@ -129,7 +142,7 @@ const result = await cracker.crack(packetHex, {
 
 `useUtf8Filter` (default: `true`)
 
-When decrypting with an incorrect key, the resulting bytes are essentially random and often form invalid UTF-8 sequences. The UTF-8 filter checks whether the decrypted message contains the Unicode replacement character (`U+FFFD`), which appears when bytes cannot be decoded as valid UTF-8. Messages containing this character are rejected as false positives.
+When decrypting with an incorrect key, the MAC can collide and the resulting bytes are essentially random and often form invalid UTF-8 sequences. The UTF-8 filter checks whether the decrypted message contains the Unicode replacement character (`U+FFFD`), which appears when bytes cannot be decoded as valid UTF-8. Messages containing this character are rejected as false positives.
 
 Both filters are enabled by default and work together to ensure that only genuinely valid decryptions are returned. You can disable them if needed, but this may result in false positive matches.
 
@@ -146,10 +159,7 @@ const result = await cracker.crack(packetHex, {
 });
 ```
 
-CPU mode is useful for:
-- Environments without WebGPU (Node.js, older browsers)
-- Testing and debugging
-- Short room names where GPU overhead isn't worthwhile
+CPU mode is useful for environments without WebGPU (i.e. Node.js or older browsers).
 
 ## Usage Examples
 
@@ -219,7 +229,7 @@ Both resume types skip past the given position, making it easy to find additiona
 
 ### Skipping False Positives
 
-When a match is found, `resumeFrom` and `resumeType` are always provided. This allows you to skip past false positives and continue searching:
+When a match is found, `resumeFrom` and `resumeType` are always provided. This allows you to skip past false positives (MAC collisions, etc.) and continue searching:
 
 ```typescript
 const result = await cracker.crack(packetHex, { maxLength: 8 });
@@ -237,7 +247,7 @@ if (result.found) {
 }
 ```
 
-**Important:** The dictionary and brute force phases are independent. A room name found in the dictionary (e.g., "able") will be encountered again during brute force. If you need to skip a false positive entirely, use `startFromType: 'bruteforce'` with the room name to skip the dictionary and start brute force after that position. If you have multiple false positives to skip, you'll need to track them yourself and continue searching when one is found again.
+**Important:** The dictionary and brute force phases are independent. A room name found in the dictionary (e.g., "able") will be encountered again during brute force. If you have false positives to skip again in the bruteforce, you'll need to track them yourself and automate the continuation when one is found again.
 
 ## Built-in Wordlist
 

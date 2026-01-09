@@ -1,7 +1,7 @@
 {
   "name": "meshcore-hashtag-cracker",
-  "version": "1.3.1",
-  "description": "MeshCore hashtag Grouptext packet brute-forcer",
+  "version": "1.4.0",
+  "description": "MeshCore hashtag GroupText packet brute-forcer with WebGPU acceleration and dictionary attacks",
   "author": "Jack Kingsman",
   "license": "MIT",
   "type": "module",

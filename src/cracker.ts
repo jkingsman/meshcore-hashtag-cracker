@@ -350,7 +350,7 @@ export class GroupTextCracker {
     // Phase 3: Brute force (GPU or CPU)
     // Use smaller batches for CPU since it's much slower
     const INITIAL_BATCH_SIZE = this.useCpu ? 1024 : 32768;
-    const TARGET_DISPATCH_MS = 1000;
+    const TARGET_DISPATCH_MS = options?.gpuDispatchMs ?? 1000;
     let currentBatchSize = INITIAL_BATCH_SIZE;
     let batchSizeTuned = false;
 
