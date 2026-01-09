@@ -33,6 +33,15 @@ Abort the current cracking operation.
 
 Check if WebGPU is available.
 
+#### `decodePacket(packetHex: string): Promise<DecodedPacket | null>`
+
+Decode a packet and extract the information needed for cracking. Returns `null` if the packet is invalid or not a GroupText packet.
+
+**Parameters:**
+- `packetHex: string` - The packet data as a hex string
+
+**Returns:** `Promise<DecodedPacket | null>`
+
 #### `destroy(): void`
 
 Clean up GPU resources.
@@ -83,6 +92,17 @@ interface ProgressReport {
   currentLength: number;     // Current room name length
   currentPosition: string;   // Current position
   phase: 'public-key' | 'wordlist' | 'bruteforce';
+}
+```
+
+### DecodedPacket
+
+```typescript
+interface DecodedPacket {
+  channelHash: string;   // Channel hash (1 byte, hex)
+  ciphertext: string;    // Encrypted ciphertext (hex)
+  cipherMac: string;     // MAC for verification (2 bytes, hex)
+  isGroupText: boolean;  // Whether this is a GroupText packet
 }
 ```
 
@@ -251,5 +271,5 @@ import {
   PUBLIC_ROOM_NAME,       // "[[public room]]"
   PUBLIC_KEY,             // Public room key
   DEFAULT_VALID_SECONDS,  // Default timestamp validity (30 days)
-} from 'meshcore-cracker';
+} from 'meshcore-hashtag-cracker';
 ```
