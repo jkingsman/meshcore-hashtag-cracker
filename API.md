@@ -184,7 +184,7 @@ const result = await cracker.crack(packetHex, {
 const cracker = new GroupTextCracker();
 
 // Load wordlist from URL
-await cracker.loadWordlist('/words_alpha.txt');
+await cracker.loadWordlist('/words.txt');
 
 // Or set wordlist directly
 cracker.setWordlist(['test', 'hello', 'world']);

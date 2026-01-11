@@ -8,7 +8,7 @@
  * const cracker = new GroupTextCracker();
  *
  * // Optional: load wordlist for dictionary attack
- * await cracker.loadWordlist('/words_alpha.txt');
+ * await cracker.loadWordlist('/words.txt');
  *
  * const result = await cracker.crack(packetHex, {
  *   maxLength: 6,

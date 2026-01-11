@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Generates src/wordlist.ts from src/words_alpha.txt
+ * Generates src/wordlist.ts from src/words.txt
  * Filters words to valid MeshCore room name format
  */
 
@@ -13,7 +13,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const srcDir = join(__dirname, '..', 'src');
 
 // Read raw wordlist
-const rawWords = readFileSync(join(srcDir, 'words_alpha.txt'), 'utf-8');
+const rawWords = readFileSync(join(srcDir, 'words.txt'), 'utf-8');
 
 // Valid room name pattern: a-z0-9, dashes allowed but not at start/end, no consecutive dashes
 const validRoomName = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
@@ -28,7 +28,7 @@ console.log(`Filtered ${rawWords.split('\n').length} words to ${words.length} va
 // Generate TypeScript file
 const output = `/**
  * English wordlist for dictionary attacks
- * Auto-generated from words_alpha.txt - do not edit manually
+ * Auto-generated from words.txt - do not edit manually
  *
  * @example
  * \`\`\`typescript
