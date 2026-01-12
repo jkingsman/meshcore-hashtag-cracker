@@ -8,6 +8,7 @@
 import { MeshCorePacketDecoder, ChannelCrypto } from '@michaelhart/meshcore-decoder';
 import { GpuBruteForce, isWebGpuSupported } from './gpu-bruteforce';
 import { CpuBruteForce } from './cpu-bruteforce';
+import { DictionaryIndex } from './dictionary-index';
 import {
   PUBLIC_ROOM_NAME,
   PUBLIC_KEY,
@@ -43,6 +44,7 @@ export class GroupTextCracker {
   private gpuInstance: GpuBruteForce | null = null;
   private cpuInstance: CpuBruteForce | null = null;
   private wordlist: string[] = [];
+  private dictionaryIndex: DictionaryIndex | null = null;
   private abortFlag = false;
   private useTimestampFilter = true;
   private useUtf8Filter = true;
@@ -52,10 +54,15 @@ export class GroupTextCracker {
   /**
    * Load a wordlist from a URL for dictionary attacks.
    * The wordlist should be a text file with one word per line.
+   * Automatically builds the hash index for O(1) lookup.
    *
    * @param url - URL to fetch the wordlist from
+   * @param onProgress - Optional callback for index building progress
    */
-  async loadWordlist(url: string): Promise<void> {
+  async loadWordlist(
+    url: string,
+    onProgress?: (phase: 'loading' | 'indexing', current: number, total: number) => void,
+  ): Promise<void> {
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`Failed to load wordlist: ${response.status} ${response.statusText}`);
@@ -69,17 +76,28 @@ export class GroupTextCracker {
 
     // Filter to valid room names only
     this.wordlist = allWords.filter(isValidRoomName);
+
+    // Build hash index for O(1) lookup
+    this.dictionaryIndex = new DictionaryIndex();
+    this.dictionaryIndex.build(this.wordlist, (indexed, total) => {
+      if (onProgress) {
+        onProgress('indexing', indexed, total);
+      }
+    });
   }
 
   /**
    * Set the wordlist directly from an array of words.
+   * Automatically builds the hash index for O(1) lookup.
    *
    * @param words - Array of room names to try
    */
   setWordlist(words: string[]): void {
-    this.wordlist = words
-      .map((w) => w.trim().toLowerCase())
-      .filter(isValidRoomName);
+    this.wordlist = words.map((w) => w.trim().toLowerCase()).filter(isValidRoomName);
+
+    // Build hash index for O(1) lookup
+    this.dictionaryIndex = new DictionaryIndex();
+    this.dictionaryIndex.build(this.wordlist);
   }
 
   /**
@@ -184,6 +202,10 @@ export class GroupTextCracker {
           this.useCpu = true;
           this.cpuInstance = new CpuBruteForce();
         }
+      }
+      // Auto-tune GPU on first use (uses this packet's ciphertext for realistic timing)
+      if (this.gpuInstance && !this.gpuInstance.isTuned()) {
+        await this.gpuInstance.autoTune(ciphertext, cipherMac);
       }
     }
 
@@ -304,47 +326,41 @@ export class GroupTextCracker {
       }
     }
 
-    // Phase 2: Dictionary attack
-    if (useDictionary && !skipDictionary && this.wordlist.length > 0) {
-      for (let i = dictionaryStartIndex; i < this.wordlist.length; i++) {
+    // Phase 2: Dictionary attack (O(1) lookup via hash index)
+    if (useDictionary && !skipDictionary && this.dictionaryIndex) {
+      // Get only words matching this packet's channel hash
+      const candidates = this.dictionaryIndex.lookup(targetHashByte);
+
+      for (let i = 0; i < candidates.length; i++) {
         if (this.abortFlag) {
           return {
             found: false,
             aborted: true,
-            resumeFrom: this.wordlist[i],
+            resumeFrom: candidates[i].word,
             resumeType: 'dictionary',
           };
         }
 
-        const word = this.wordlist[i];
-        const key = deriveKeyFromRoomName('#' + word);
-        const wordChannelHash = getChannelHash(key);
+        const { word, key } = candidates[i];
 
-        if (parseInt(wordChannelHash, 16) === targetHashByte) {
-          const result = verifyMacAndFilters(key);
-          if (result.valid) {
-            return {
-              found: true,
-              roomName: word,
-              key,
-              decryptedMessage: result.message,
-              // Include resume info so caller can skip this result and continue
-              resumeFrom: word,
-              resumeType: 'dictionary',
-            };
-          }
+        // Key and channel hash already computed - just verify MAC
+        const result = verifyMacAndFilters(key);
+        if (result.valid) {
+          return {
+            found: true,
+            roomName: word,
+            key,
+            decryptedMessage: result.message,
+            resumeFrom: word,
+            resumeType: 'dictionary',
+          };
         }
 
         totalChecked++;
-
-        // Progress update
-        const now = performance.now();
-        if (now - lastProgressUpdate >= 200) {
-          reportProgress('wordlist', word.length, word);
-          lastProgressUpdate = now;
-          await new Promise((resolve) => setTimeout(resolve, 0));
-        }
       }
+
+      // Report dictionary completion
+      reportProgress('wordlist', 0, `checked ${candidates.length} candidates`);
     }
 
     // Phase 3: Brute force (GPU or CPU)

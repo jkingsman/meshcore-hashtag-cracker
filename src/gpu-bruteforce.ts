@@ -30,6 +30,10 @@ export class GpuBruteForce {
   private bindGroup: GPUBindGroup | null = null;
   private bindGroupDirty: boolean = true;
 
+  // Dynamic tuning parameters
+  private candidatesPerThread: number = 16;
+  private tuned: boolean = false;
+
   // Reusable zero buffer for resetting match count
   private static readonly ZERO_DATA = new Uint32Array([0]);
 
@@ -404,8 +408,16 @@ fn process_candidate(name_idx: u32) {
   }
 }
 
-// Each thread processes 16 candidates to amortize thread overhead
-const CANDIDATES_PER_THREAD: u32 = 16u;
+// CANDIDATES_PER_THREAD is injected dynamically during pipeline creation
+`; // End of static shader portion
+
+  // Generate complete shader with current CPT value
+  private buildShaderCode(): string {
+    return (
+      this.shaderCode +
+      `
+// Each thread processes ${this.candidatesPerThread} candidates to amortize thread overhead
+const CANDIDATES_PER_THREAD: u32 = ${this.candidatesPerThread}u;
 
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
@@ -420,7 +432,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     process_candidate(name_idx);
   }
 }
-`;
+`
+    );
+  }
 
   async init(): Promise<boolean> {
     if (!navigator.gpu) {
@@ -476,28 +490,121 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         });
       }
 
-      // Create pipeline
-      const shaderModule = this.device.createShaderModule({
-        code: this.shaderCode,
-      });
-
-      const pipelineLayout = this.device.createPipelineLayout({
-        bindGroupLayouts: [this.bindGroupLayout],
-      });
-
-      this.pipeline = this.device.createComputePipeline({
-        layout: pipelineLayout,
-        compute: {
-          module: shaderModule,
-          entryPoint: 'main',
-        },
-      });
+      // Create pipeline with current CPT value
+      this.rebuildPipeline();
 
       return true;
     } catch (e) {
       console.error('WebGPU initialization failed:', e);
       return false;
     }
+  }
+
+  /**
+   * Rebuild the compute pipeline with the current candidatesPerThread value.
+   */
+  private rebuildPipeline(): void {
+    if (!this.device || !this.bindGroupLayout) {
+      return;
+    }
+
+    const shaderModule = this.device.createShaderModule({
+      code: this.buildShaderCode(),
+    });
+
+    const pipelineLayout = this.device.createPipelineLayout({
+      bindGroupLayouts: [this.bindGroupLayout],
+    });
+
+    this.pipeline = this.device.createComputePipeline({
+      layout: pipelineLayout,
+      compute: {
+        module: shaderModule,
+        entryPoint: 'main',
+      },
+    });
+  }
+
+  /**
+   * Auto-tune the candidates per thread parameter by testing different values
+   * and measuring throughput. Scales up until performance stops improving.
+   *
+   * @param sampleCiphertextHex - Sample ciphertext for realistic timing
+   * @param sampleMacHex - Sample MAC for realistic timing
+   * @param onProgress - Optional callback for tuning progress
+   * @returns The optimal CPT value found
+   */
+  async autoTune(
+    sampleCiphertextHex: string,
+    sampleMacHex: string,
+    onProgress?: (cpt: number, throughput: number) => void,
+  ): Promise<number> {
+    if (this.tuned) {
+      return this.candidatesPerThread;
+    }
+
+    const cptValues = [1, 2, 4, 8, 16, 32];
+    const testBatchSize = 1024 * 1024; // 1M candidates per test
+    const testLength = 4; // Use length 4 for testing
+    const warmupIterations = 2;
+    const measureIterations = 3;
+    const improvementThreshold = 1.02; // 2% improvement required
+
+    let bestCpt = this.candidatesPerThread;
+    let bestThroughput = 0;
+
+    for (const cpt of cptValues) {
+      // Set new CPT and rebuild pipeline
+      this.candidatesPerThread = cpt;
+      this.rebuildPipeline();
+
+      // Warm up
+      for (let i = 0; i < warmupIterations; i++) {
+        await this.runBatch(0x42, testLength, 0, testBatchSize, sampleCiphertextHex, sampleMacHex);
+      }
+
+      // Measure
+      const start = performance.now();
+      for (let i = 0; i < measureIterations; i++) {
+        await this.runBatch(0x42, testLength, 0, testBatchSize, sampleCiphertextHex, sampleMacHex);
+      }
+      const elapsed = performance.now() - start;
+
+      const throughput = (testBatchSize * measureIterations) / (elapsed / 1000);
+
+      if (onProgress) {
+        onProgress(cpt, throughput);
+      }
+
+      if (throughput > bestThroughput * improvementThreshold) {
+        bestThroughput = throughput;
+        bestCpt = cpt;
+      } else if (throughput < bestThroughput * 0.95) {
+        // Performance degraded significantly, stop testing higher values
+        break;
+      }
+    }
+
+    // Set optimal CPT and rebuild pipeline
+    this.candidatesPerThread = bestCpt;
+    this.rebuildPipeline();
+    this.tuned = true;
+
+    return bestCpt;
+  }
+
+  /**
+   * Get the current candidates per thread value.
+   */
+  getCandidatesPerThread(): number {
+    return this.candidatesPerThread;
+  }
+
+  /**
+   * Check if auto-tuning has been performed.
+   */
+  isTuned(): boolean {
+    return this.tuned;
   }
 
   isAvailable(): boolean {
@@ -631,9 +738,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     const passEncoder = commandEncoder.beginComputePass();
     passEncoder.setPipeline(this.pipeline);
     passEncoder.setBindGroup(0, this.bindGroup);
-    // Each workgroup has 256 threads, each processing 16 candidates
-    const CANDIDATES_PER_THREAD = 16;
-    passEncoder.dispatchWorkgroups(Math.ceil(batchSize / (256 * CANDIDATES_PER_THREAD)));
+    // Each workgroup has 256 threads, each processing candidatesPerThread candidates
+    passEncoder.dispatchWorkgroups(Math.ceil(batchSize / (256 * this.candidatesPerThread)));
     passEncoder.end();
 
     // Copy results to current staging buffers

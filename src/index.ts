@@ -55,3 +55,6 @@ export {
 } from './core';
 
 export { isWebGpuSupported } from './gpu-bruteforce';
+
+// Dictionary index for advanced usage
+export { DictionaryIndex } from './dictionary-index';
