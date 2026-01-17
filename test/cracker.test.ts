@@ -67,6 +67,7 @@ describe('Core Functions', () => {
       expect(countNamesForLength(2)).toBe(36 * 36);
     });
   });
+
 });
 
 describe('GroupTextCracker', () => {
@@ -86,6 +87,7 @@ describe('GroupTextCracker', () => {
         maxLength: 4,
         useDictionary: true,
         useTimestampFilter: false,
+        useSenderFilter: false,
       });
 
       expect(result.found).toBe(true);
@@ -105,6 +107,7 @@ describe('GroupTextCracker', () => {
         maxLength: 2,
         useDictionary: false,
         useTimestampFilter: false,
+        useSenderFilter: false,
       });
 
       expect(result.found).toBe(true);
@@ -123,6 +126,7 @@ describe('GroupTextCracker', () => {
         maxLength: 1, // Too short for 'at' via brute force
         useDictionary: true,
         useTimestampFilter: false,
+        useSenderFilter: false,
       });
 
       expect(result.found).toBe(false);
@@ -140,6 +144,7 @@ describe('GroupTextCracker', () => {
         forceCpu: true,
         maxLength: 2,
         useTimestampFilter: false,
+        useSenderFilter: false,
       });
 
       expect(result.found).toBe(true);
@@ -156,6 +161,7 @@ describe('GroupTextCracker', () => {
         forceCpu: true,
         maxLength: 2,
         useTimestampFilter: false,
+        useSenderFilter: false,
       });
 
       expect(result.found).toBe(true);
@@ -177,6 +183,7 @@ describe('GroupTextCracker', () => {
         forceCpu: true,
         maxLength: 2,
         useTimestampFilter: false,
+        useSenderFilter: false,
       });
 
       expect(result.found).toBe(true);
@@ -193,13 +200,15 @@ describe('GroupTextCracker', () => {
       const result = await cracker.crack(testPacket, {
         forceCpu: true,
         maxLength: 2,
-        useTimestampFilter: false, // Disable for test - packet timestamp may be old
+        useTimestampFilter: false,
+        useSenderFilter: false, // Disable for test - packet timestamp may be old
         useUtf8Filter: true,
       });
 
       expect(result.found).toBe(true);
       expect(result.roomName).toBe('aa');
-      expect(result.decryptedMessage).toBe('foo');
+      expect(result.decryptedMessage).toContain('foo');
+      expect(result.decryptedMessage).toContain(':'); // Sender prefix included
       expect(result.key).toBeDefined();
 
       cracker.destroy();
@@ -214,6 +223,7 @@ describe('GroupTextCracker', () => {
         maxLength: 2,
         startingLength: 2,
         useTimestampFilter: false,
+        useSenderFilter: false,
       });
 
       expect(result.found).toBe(true);
@@ -231,6 +241,7 @@ describe('GroupTextCracker', () => {
         maxLength: 3,
         startingLength: 3,
         useTimestampFilter: false,
+        useSenderFilter: false,
       });
 
       expect(result.found).toBe(false);
@@ -250,6 +261,7 @@ describe('GroupTextCracker', () => {
         maxLength: 2,
         useDictionary: false,
         useTimestampFilter: false,
+        useSenderFilter: false,
       });
 
       expect(result.found).toBe(true);
@@ -269,6 +281,7 @@ describe('GroupTextCracker', () => {
         maxLength: 2,
         useDictionary: true,
         useTimestampFilter: false,
+        useSenderFilter: false,
       });
 
       expect(result.found).toBe(true);
@@ -292,6 +305,7 @@ describe('GroupTextCracker', () => {
         forceCpu: true,
         maxLength: 5,
         useTimestampFilter: false,
+        useSenderFilter: false,
         useUtf8Filter: false,
       });
 
@@ -313,6 +327,7 @@ describe('GroupTextCracker', () => {
         startFrom: 'about',
         startFromType: 'dictionary',
         useTimestampFilter: false,
+        useSenderFilter: false,
         useUtf8Filter: false,
       });
 
@@ -330,6 +345,7 @@ describe('GroupTextCracker', () => {
         maxLength: 5,
         useDictionary: false,
         useTimestampFilter: false,
+        useSenderFilter: false,
         useUtf8Filter: false,
       });
 
@@ -356,6 +372,7 @@ describe('GroupTextCracker', () => {
         startFrom: 'able',
         startFromType: 'bruteforce',
         useTimestampFilter: false,
+        useSenderFilter: false,
         useUtf8Filter: false,
       });
 
@@ -374,6 +391,7 @@ describe('GroupTextCracker', () => {
         forceCpu: true,
         maxLength: 5,
         useTimestampFilter: false,
+        useSenderFilter: false,
         useUtf8Filter: false,
       });
 
@@ -387,6 +405,7 @@ describe('GroupTextCracker', () => {
         startFrom: 'able',
         startFromType: 'dictionary',
         useTimestampFilter: false,
+        useSenderFilter: false,
         useUtf8Filter: false,
       });
 
@@ -409,6 +428,7 @@ describe('GroupTextCracker', () => {
         startFrom: 'a', // Before 'able' in brute force order
         startFromType: 'bruteforce',
         useTimestampFilter: false,
+        useSenderFilter: false,
         useUtf8Filter: false,
       });
 
@@ -432,6 +452,7 @@ describe('GroupTextCracker', () => {
         startFrom: 'ablf',
         startFromType: 'bruteforce',
         useTimestampFilter: false,
+        useSenderFilter: false,
         useUtf8Filter: false,
       });
 
@@ -461,6 +482,116 @@ describe('GroupTextCracker', () => {
       const decoded = await cracker.decodePacket('invalid');
 
       expect(decoded).toBeNull();
+
+      cracker.destroy();
+    });
+  });
+
+  describe('sender filter', () => {
+    // Test packet: room #aa, message without sender field
+    const packetWithoutSender = '150013C7FDAD779ABAB94700F7C37A641A6EFFC531D8E64F6EE23FC9D6B45F70DD3F3AEEB6C3807D22C18A77AC77C5A5DEC1F909FC';
+
+    // Test packet: room #at, message with sender "Flightless 🥝"
+    const packetWithSender = '15001c1f82f2e792c8cf2267a6f0edc8a8175219eda0c8af1bedda53d7ea9612fa957890b1ee8c8c97891e8b0e0600c01c1714f5539d87636045b059cf5dfbff1e6bcc061e';
+
+    it('should find message with sender when sender filter is enabled (default)', async () => {
+      const cracker = new GroupTextCracker();
+      cracker.setWordlist(['at']);
+
+      const result = await cracker.crack(packetWithSender, {
+        forceCpu: true,
+        maxLength: 2,
+        useTimestampFilter: false,
+        // useSenderFilter defaults to true
+      });
+
+      expect(result.found).toBe(true);
+      expect(result.roomName).toBe('at');
+      expect(result.decryptedMessage).toContain(':');
+
+      cracker.destroy();
+    });
+
+    it('should find message with sender via brute force when sender filter is enabled', async () => {
+      const cracker = new GroupTextCracker();
+
+      const result = await cracker.crack(packetWithSender, {
+        forceCpu: true,
+        maxLength: 2,
+        useDictionary: false,
+        useTimestampFilter: false,
+        // useSenderFilter defaults to true
+      });
+
+      expect(result.found).toBe(true);
+      expect(result.roomName).toBe('at');
+      expect(result.decryptedMessage).toContain(':');
+
+      cracker.destroy();
+    });
+
+    it('should reject message without sender when sender filter is enabled (default)', async () => {
+      const cracker = new GroupTextCracker();
+      cracker.setWordlist(['aa']);
+
+      const result = await cracker.crack(packetWithoutSender, {
+        forceCpu: true,
+        maxLength: 2,
+        useTimestampFilter: false,
+        // useSenderFilter defaults to true
+      });
+
+      expect(result.found).toBe(false);
+
+      cracker.destroy();
+    });
+
+    it('should reject message without sender via brute force when sender filter is enabled', async () => {
+      const cracker = new GroupTextCracker();
+
+      const result = await cracker.crack(packetWithoutSender, {
+        forceCpu: true,
+        maxLength: 2,
+        useDictionary: false,
+        useTimestampFilter: false,
+        // useSenderFilter defaults to true
+      });
+
+      expect(result.found).toBe(false);
+
+      cracker.destroy();
+    });
+
+    it('should find message without sender when sender filter is disabled', async () => {
+      const cracker = new GroupTextCracker();
+      cracker.setWordlist(['aa']);
+
+      const result = await cracker.crack(packetWithoutSender, {
+        forceCpu: true,
+        maxLength: 2,
+        useTimestampFilter: false,
+        useSenderFilter: false,
+      });
+
+      expect(result.found).toBe(true);
+      expect(result.roomName).toBe('aa');
+
+      cracker.destroy();
+    });
+
+    it('should find message without sender via brute force when sender filter is disabled', async () => {
+      const cracker = new GroupTextCracker();
+
+      const result = await cracker.crack(packetWithoutSender, {
+        forceCpu: true,
+        maxLength: 2,
+        useDictionary: false,
+        useTimestampFilter: false,
+        useSenderFilter: false,
+      });
+
+      expect(result.found).toBe(true);
+      expect(result.roomName).toBe('aa');
 
       cracker.destroy();
     });

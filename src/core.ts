@@ -168,6 +168,13 @@ export function isValidUtf8(text: string): boolean {
 }
 
 /**
+ * Check if text contains a colon character.
+ */
+export function hasColon(text: string): boolean {
+  return text.includes(':');
+}
+
+/**
  * Room name generator - iterates through all valid room names.
  */
 export class RoomNameGenerator {

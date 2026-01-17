@@ -46,6 +46,7 @@ export class GroupTextCracker {
   private abortFlag = false;
   private useTimestampFilter = true;
   private useUtf8Filter = true;
+  private useSenderFilter = true;
   private validSeconds = DEFAULT_VALID_SECONDS;
   private useCpu = false;
 
@@ -149,6 +150,7 @@ export class GroupTextCracker {
     this.abortFlag = false;
     this.useTimestampFilter = options?.useTimestampFilter ?? true;
     this.useUtf8Filter = options?.useUtf8Filter ?? true;
+    this.useSenderFilter = options?.useSenderFilter ?? true;
     this.validSeconds = options?.validSeconds ?? DEFAULT_VALID_SECONDS;
     this.useCpu = options?.forceCpu ?? false;
     const maxLength = options?.maxLength ?? 8;
@@ -283,7 +285,16 @@ export class GroupTextCracker {
         return { valid: false };
       }
 
-      return { valid: true, message: result.data.message };
+      if (this.useSenderFilter && !result.data.sender) {
+        return { valid: false };
+      }
+
+      // Format message with sender prefix if available
+      const fullMessage = result.data.sender
+        ? `${result.data.sender}: ${result.data.message}`
+        : result.data.message;
+
+      return { valid: true, message: fullMessage };
     };
 
     // Phase 1: Try public key (only if not resuming)

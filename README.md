@@ -12,7 +12,7 @@ This is an LLM-developed library and has borne out its correctness in various ap
 
 - WebGPU-accelerated brute force (100M+ keys/second on modern GPUs)
 - Dictionary attack support with built-in English wordlist (370k words)
-- Configurable timestamp and UTF-8 filters to handle very-possible MAC collisions with sanity checks
+- Configurable filters (sender, UTF-8, timestamp) to handle MAC collisions with sanity checks
 - Progress callbacks with ETA
 - Resume support for interrupted searches
 
@@ -80,8 +80,10 @@ cracker.destroy();
 ```
 Room: #aa
 Key: e147f36926b7b509af9b41b65304dc30
-Message: foo
+Message: SenderName: Hello world!
 ```
+
+Note: When a sender is detected in the message, `decryptedMessage` includes the full "sender: message" format.
 
 ### Options
 
@@ -90,9 +92,10 @@ const result = await cracker.crack(packetHex, {
   maxLength: 8,           // Max room name length to try (default: 8)
   startingLength: 1,      // Min room name length to try (default: 1)
   useDictionary: true,    // Try dictionary words first (default: true); needs cracker.setWordlist() called first
+  useSenderFilter: true,  // Reject messages without sender (default: true)
+  useUtf8Filter: true,    // Reject invalid UTF-8 (default: true)
   useTimestampFilter: true, // Reject old timestamps (default: true)
   validSeconds: 2592000,  // Timestamp window in seconds (default: 30 days)
-  useUtf8Filter: true,    // Reject invalid UTF-8 (default: true)
   forceCpu: false,        // Force CPU mode, skip GPU (default: false)
   startFrom: 'abc',       // Resume after this position (optional)
   startFromType: 'bruteforce', // 'dictionary' or 'bruteforce' (default: 'bruteforce')
@@ -143,3 +146,7 @@ npm run test:watch
 ## License
 
 MIT
+
+This library uses town and placenames in the word list sourced from https://simplemaps.com/data/us-cities, used under CC BY 4.0.
+
+This library also uses airport codes sourced from https://en.wikipedia.org/wiki/List_of_airports_in_the_United_States.

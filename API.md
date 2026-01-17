@@ -55,9 +55,10 @@ interface CrackOptions {
   maxLength?: number;           // Max room name length (default: 8)
   startingLength?: number;      // Min room name length (default: 1)
   useDictionary?: boolean;      // Use dictionary attack (default: true)
+  useSenderFilter?: boolean;    // Filter messages without sender (default: true)
+  useUtf8Filter?: boolean;      // Filter invalid UTF-8 (default: true)
   useTimestampFilter?: boolean; // Filter old timestamps (default: true)
   validSeconds?: number;        // Timestamp validity window in seconds (default: 2592000 = 30 days)
-  useUtf8Filter?: boolean;      // Filter invalid UTF-8 (default: true)
   startFrom?: string;           // Resume from position
   startFromType?: 'dictionary' | 'bruteforce'; // Type of resume position (default: 'bruteforce')
   forceCpu?: boolean;           // Force CPU-based cracking (default: false)
@@ -84,7 +85,7 @@ interface CrackResult {
   found: boolean;
   roomName?: string;          // Room name without '#'
   key?: string;               // Encryption key (hex)
-  decryptedMessage?: string;  // Decrypted message
+  decryptedMessage?: string;  // Decrypted message (in "sender: message" format when sender exists)
   aborted?: boolean;          // Was operation aborted
   resumeFrom?: string;        // Position for resume (always set on success/abort/not-found)
   resumeType?: 'dictionary' | 'bruteforce'; // Type of resume position
@@ -121,15 +122,31 @@ interface DecodedPacket {
 
 ## Validation Filters
 
-The cracker uses two filters to quickly reject false positives and improve accuracy:
+The cracker uses several filters to reject false positives (MAC collisions) and improve accuracy:
+
+### Sender Filter
+
+`useSenderFilter` (default: `true`)
+
+Valid MeshCore messages typically include a sender field in the format "sender: message". The sender filter checks whether the meshcore-decoder found a sender field in the decrypted message. Technically, this means the decrypted text contains ": " (colon-space) within the first 50 characters, where the part before the colon doesn't contain special characters like brackets.
+
+When a sender is detected, the `decryptedMessage` field returns the full "sender: message" format. When no sender is detected (or the filter is disabled), it returns just the message content.
+
+This filter is effective because random decryption rarely produces valid sender patterns.
+
+### UTF-8 Filter
+
+`useUtf8Filter` (default: `true`)
+
+When decrypting with an incorrect key, the MAC can collide and the resulting bytes are essentially random and often form invalid UTF-8 sequences. The UTF-8 filter checks whether the decrypted message contains the Unicode replacement character (`U+FFFD`), which appears when bytes cannot be decoded as valid UTF-8. Messages containing this character are rejected as false positives.
 
 ### Timestamp Filter
 
 `useTimestampFilter` (default: `true`)
 
-MeshCore packets contain a timestamp field. When a candidate key decrypts the packet, the timestamp filter checks whether the resulting timestamp falls within the validity window. If the decrypted timestamp is far in the past or future, it indicates the wrong key was used but had a MAC collision, and the candidate is rejected. This dramatically reduces false positives since random decryption rarely produces a plausible recent timestamp.
+MeshCore packets contain a timestamp field. When a candidate key decrypts the packet, the timestamp filter checks whether the resulting timestamp falls within the validity window (default: 30 days). If the decrypted timestamp is far in the past or future, it indicates the wrong key was used but had a MAC collision, and the candidate is rejected.
 
-The validity window can be customized using the `validSeconds` option (default: 2592000 seconds = 30 days). For example, to only accept packets from the last hour:
+The validity window can be customized using the `validSeconds` option:
 
 ```typescript
 const result = await cracker.crack(packetHex, {
@@ -138,13 +155,17 @@ const result = await cracker.crack(packetHex, {
 });
 ```
 
-### UTF-8 Filter
+Disable this filter when cracking older packets:
 
-`useUtf8Filter` (default: `true`)
+```typescript
+const result = await cracker.crack(packetHex, {
+  useTimestampFilter: false, // Accept packets with any timestamp
+});
+```
 
-When decrypting with an incorrect key, the MAC can collide and the resulting bytes are essentially random and often form invalid UTF-8 sequences. The UTF-8 filter checks whether the decrypted message contains the Unicode replacement character (`U+FFFD`), which appears when bytes cannot be decoded as valid UTF-8. Messages containing this character are rejected as false positives.
+### Filter Recommendations
 
-Both filters are enabled by default and work together to ensure that only genuinely valid decryptions are returned. You can disable them if needed, but this may result in false positive matches.
+For most use cases, the default settings (`useSenderFilter: true`, `useUtf8Filter: true`, `useTimestampFilter: true`) work well. Disable timestamp filter when cracking older packets. Disable all filters if you're debugging or searching for unusual message formats.
 
 ## CPU Fallback
 
@@ -274,6 +295,7 @@ import {
   verifyMac,              // Verify MAC
   isTimestampValid,       // Check timestamp validity
   isValidUtf8,            // Check UTF-8 validity
+  hasColon,               // Check if text contains colon
   indexToRoomName,        // Convert index to room name
   roomNameToIndex,        // Convert room name to index
   countNamesForLength,    // Count names for a length

@@ -404,8 +404,8 @@ fn process_candidate(name_idx: u32) {
   }
 }
 
-// Each thread processes 16 candidates to amortize thread overhead
-const CANDIDATES_PER_THREAD: u32 = 16u;
+// Each thread processes 32 candidates to amortize thread overhead
+const CANDIDATES_PER_THREAD: u32 = 32u;
 
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
@@ -631,8 +631,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     const passEncoder = commandEncoder.beginComputePass();
     passEncoder.setPipeline(this.pipeline);
     passEncoder.setBindGroup(0, this.bindGroup);
-    // Each workgroup has 256 threads, each processing 16 candidates
-    const CANDIDATES_PER_THREAD = 16;
+    // Each workgroup has 256 threads, each processing 32 candidates
+    const CANDIDATES_PER_THREAD = 32;
     passEncoder.dispatchWorkgroups(Math.ceil(batchSize / (256 * CANDIDATES_PER_THREAD)));
     passEncoder.end();
 

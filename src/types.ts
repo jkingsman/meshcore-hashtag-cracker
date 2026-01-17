@@ -42,6 +42,20 @@ export interface CrackOptions {
   useUtf8Filter?: boolean;
 
   /**
+   * Filter results by sender presence (default: true).
+   * When enabled, only accepts results where the decrypted message
+   * has a valid sender field, which is expected in valid MeshCore messages.
+   *
+   * Technically, this checks for ": " (colon-space) within the first 50
+   * characters of the decrypted text, where the part before the colon
+   * doesn't contain special characters like brackets.
+   *
+   * When a sender is found, the decrypted message includes the full
+   * "sender: message" format.
+   */
+  useSenderFilter?: boolean;
+
+  /**
    * Resume cracking from a specific position.
    * Useful for resuming interrupted searches.
    * The interpretation depends on startFromType.

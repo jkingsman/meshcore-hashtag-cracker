@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.6.0
+
+**Features:**
+- Added `useSenderFilter` option (default: `true`) to filter results by sender presence
+  - Rejects decrypted messages that don't have a valid sender field
+  - When a sender is found, `decryptedMessage` returns "sender: message" format
+  - More effective than timestamp filter for rejecting MAC collisions
+- GPU performance optimization: increased `CANDIDATES_PER_THREAD` from 16 to 32
+
+**Wordlist:**
+- Expanded wordlist to include US airport codes and USA county/town names
+
+**Documentation:**
+- Updated all documentation to reflect new filter options and defaults
+- Added new test packets with sender field examples
+
+## v1.5.0
+
+**Wordlist:**
+- Expanded English wordlist with additional geographic terms
+
 ## v1.4.0
 
 **Features:**

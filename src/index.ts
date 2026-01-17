@@ -12,7 +12,7 @@
  *
  * const result = await cracker.crack(packetHex, {
  *   maxLength: 6,
- *   useTimestampFilter: true,
+ *   useSenderFilter: true,
  *   useUtf8Filter: true,
  * }, (progress) => {
  *   console.log(`${progress.percent.toFixed(1)}% - ETA: ${progress.etaSeconds}s`);
@@ -46,6 +46,7 @@ export {
   verifyMac,
   isTimestampValid,
   isValidUtf8,
+  hasColon,
   indexToRoomName,
   roomNameToIndex,
   countNamesForLength,
