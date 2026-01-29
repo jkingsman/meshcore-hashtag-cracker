@@ -55,16 +55,37 @@ interface CrackOptions {
   maxLength?: number;           // Max room name length (default: 8)
   startingLength?: number;      // Min room name length (default: 1)
   useDictionary?: boolean;      // Use dictionary attack (default: true)
+  useTwoWordCombinations?: boolean; // EXPERIMENTAL: Try word pairs (default: false)
   useSenderFilter?: boolean;    // Filter messages without sender (default: true)
   useUtf8Filter?: boolean;      // Filter invalid UTF-8 (default: true)
   useTimestampFilter?: boolean; // Filter old timestamps (default: true)
   validSeconds?: number;        // Timestamp validity window in seconds (default: 2592000 = 30 days)
   startFrom?: string;           // Resume from position
-  startFromType?: 'dictionary' | 'bruteforce'; // Type of resume position (default: 'bruteforce')
+  startFromType?: 'dictionary' | 'dictionary-pair' | 'bruteforce'; // Type of resume position (default: 'bruteforce')
   forceCpu?: boolean;           // Force CPU-based cracking (default: false)
   gpuDispatchMs?: number;       // EXPERIMENTAL: GPU dispatch target time (default: 1000)
 }
 ```
+
+#### useTwoWordCombinations (Experimental)
+
+When enabled, after the initial dictionary attack, tries every combination of two words concatenated together (e.g., "hello" + "world" = "helloworld") where the combined length is ≤ 30 characters.
+
+```typescript
+const result = await cracker.crack(packetHex, {
+  useDictionary: true,
+  useTwoWordCombinations: true, // Try word pairs after single words
+});
+```
+
+**Important considerations:**
+- This is a cartesian product: for N words, it tries N × N combinations
+- Only pairs with combined length ≤ 30 characters are tried
+- Invalid combinations (e.g., consecutive dashes at join point) are skipped
+- Can significantly increase search time depending on wordlist size
+- Only used when `useDictionary: true` and a wordlist is loaded
+
+When a match is found during word pair phase, `resumeFrom` uses the format `"word1+word2"` and `resumeType` is `'dictionary-pair'`.
 
 #### gpuDispatchMs (Experimental)
 
@@ -88,7 +109,7 @@ interface CrackResult {
   decryptedMessage?: string;  // Decrypted message (in "sender: message" format when sender exists)
   aborted?: boolean;          // Was operation aborted
   resumeFrom?: string;        // Position for resume (always set on success/abort/not-found)
-  resumeType?: 'dictionary' | 'bruteforce'; // Type of resume position
+  resumeType?: 'dictionary' | 'dictionary-pair' | 'bruteforce'; // Type of resume position
   error?: string;             // Error message
 }
 ```
@@ -104,8 +125,8 @@ interface ProgressReport {
   etaSeconds: number;        // Estimated time remaining
   elapsedSeconds: number;    // Time elapsed
   currentLength: number;     // Current room name length
-  currentPosition: string;   // Current position
-  phase: 'public-key' | 'wordlist' | 'bruteforce';
+  currentPosition: string;   // Current position (for wordlist-pairs: "word1+word2")
+  phase: 'public-key' | 'wordlist' | 'wordlist-pairs' | 'bruteforce';
 }
 ```
 
@@ -243,10 +264,11 @@ if (result.aborted && result.resumeFrom) {
 
 **Resume behavior:**
 
-- `startFromType: 'dictionary'` - Resume from AFTER a dictionary word, then continue to brute force after dictionary completes
-- `startFromType: 'bruteforce'` (default) - Skip dictionary entirely, resume brute force from AFTER the specified position
+- `startFromType: 'dictionary'` - Resume from AFTER a dictionary word, then continue to word pairs (if enabled) and brute force
+- `startFromType: 'dictionary-pair'` - Resume from AFTER a word pair (format: "word1+word2"), then continue to brute force
+- `startFromType: 'bruteforce'` (default) - Skip dictionary and word pairs entirely, resume brute force from AFTER the specified position
 
-Both resume types skip past the given position, making it easy to find additional matches.
+All resume types skip past the given position, making it easy to find additional matches.
 
 ### Skipping False Positives
 

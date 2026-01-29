@@ -64,10 +64,11 @@ export interface CrackOptions {
 
   /**
    * How to interpret the startFrom value (default: 'bruteforce').
-   * - 'dictionary': startFrom is a dictionary word; resume dictionary attack from that word, then continue to brute force
-   * - 'bruteforce': startFrom is a brute-force position; skip dictionary and resume brute force from that position
+   * - 'dictionary': startFrom is a dictionary word; resume dictionary attack from that word, then continue to word pairs and brute force
+   * - 'dictionary-pair': startFrom is "word1+word2"; resume two-word combination attack from that pair, then continue to brute force
+   * - 'bruteforce': startFrom is a brute-force position; skip dictionary/pairs and resume brute force from that position
    */
-  startFromType?: 'dictionary' | 'bruteforce';
+  startFromType?: 'dictionary' | 'dictionary-pair' | 'bruteforce';
 
   /**
    * Force CPU-based cracking instead of WebGPU (default: false).
@@ -75,6 +76,15 @@ export interface CrackOptions {
    * Also useful for testing.
    */
   forceCpu?: boolean;
+
+  /**
+   * EXPERIMENTAL: Try two-word combinations from the wordlist (default: false).
+   * After the dictionary attack, tries every pair of words concatenated together
+   * (e.g., "hello" + "world" = "helloworld") where the combined length is <= 30.
+   * This can significantly increase search time depending on wordlist size.
+   * Only used when useDictionary is true and a wordlist is loaded.
+   */
+  useTwoWordCombinations?: boolean;
 
   /**
    * EXPERIMENTAL - Target GPU dispatch time in milliseconds (default: 1000).
@@ -120,7 +130,7 @@ export interface ProgressReport {
   currentPosition: string;
 
   /** Current phase of cracking */
-  phase: 'public-key' | 'wordlist' | 'bruteforce';
+  phase: 'public-key' | 'wordlist' | 'wordlist-pairs' | 'bruteforce';
 }
 
 /**
@@ -159,9 +169,10 @@ export interface CrackResult {
   /**
    * Type of resume position. Use as `startFromType` when resuming.
    * - 'dictionary': resumeFrom is a dictionary word
+   * - 'dictionary-pair': resumeFrom is "word1+word2" (two-word combination)
    * - 'bruteforce': resumeFrom is a brute-force position
    */
-  resumeType?: 'dictionary' | 'bruteforce';
+  resumeType?: 'dictionary' | 'dictionary-pair' | 'bruteforce';
 
   /** Error message if an error occurred */
   error?: string;

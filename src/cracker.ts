@@ -7,6 +7,7 @@
 
 import { MeshCorePacketDecoder, ChannelCrypto } from '@michaelhart/meshcore-decoder';
 import { GpuBruteForce, isWebGpuSupported } from './gpu-bruteforce';
+import { GpuWordPairs } from './gpu-wordpairs';
 import { CpuBruteForce } from './cpu-bruteforce';
 import {
   PUBLIC_ROOM_NAME,
@@ -41,6 +42,7 @@ function isValidRoomName(name: string): boolean {
  */
 export class GroupTextCracker {
   private gpuInstance: GpuBruteForce | null = null;
+  private gpuWordPairs: GpuWordPairs | null = null;
   private cpuInstance: CpuBruteForce | null = null;
   private wordlist: string[] = [];
   private abortFlag = false;
@@ -156,6 +158,7 @@ export class GroupTextCracker {
     const maxLength = options?.maxLength ?? 8;
     const startingLength = options?.startingLength ?? 1;
     const useDictionary = options?.useDictionary ?? true;
+    const useTwoWordCombinations = options?.useTwoWordCombinations ?? false;
     const startFromType = options?.startFromType ?? 'bruteforce';
 
     // Normalize packet hex to lowercase for consistent processing
@@ -198,6 +201,9 @@ export class GroupTextCracker {
     let startFromOffset = 0;
     let dictionaryStartIndex = 0;
     let skipDictionary = false;
+    let skipWordPairs = false;
+    let wordPairStartI = 0;
+    let wordPairStartJ = 0;
 
     if (options?.startFrom) {
       // Normalize to lowercase for consistent matching
@@ -210,9 +216,21 @@ export class GroupTextCracker {
           dictionaryStartIndex = wordIndex + 1; // Start after the given word
         }
         // If word not found, start dictionary from beginning
-      } else {
-        // Brute force resume: skip dictionary entirely
+      } else if (startFromType === 'dictionary-pair') {
+        // Resume from a two-word combination (format: "word1+word2")
+        // Note: actual indices will be resolved later after shortWords is built
         skipDictionary = true;
+        // Store the words to find later - indices will be set after shortWords is populated
+        const plusIndex = normalizedStartFrom.indexOf('+');
+        if (plusIndex > 0) {
+          // Store for later resolution
+          (options as { _pairResumeWord1?: string; _pairResumeWord2?: string })._pairResumeWord1 = normalizedStartFrom.substring(0, plusIndex);
+          (options as { _pairResumeWord1?: string; _pairResumeWord2?: string })._pairResumeWord2 = normalizedStartFrom.substring(plusIndex + 1);
+        }
+      } else {
+        // Brute force resume: skip dictionary and word pairs entirely
+        skipDictionary = true;
+        skipWordPairs = true;
         const pos = roomNameToIndex(normalizedStartFrom);
         if (pos) {
           startFromLength = Math.max(startingLength, pos.length);
@@ -231,6 +249,74 @@ export class GroupTextCracker {
     if (useDictionary && !skipDictionary && this.wordlist.length > 0) {
       totalCandidates += this.wordlist.length - dictionaryStartIndex;
     }
+
+    // For two-word combinations, pre-filter to short words only (max length 15 each for 30 combined)
+    // This dramatically reduces the search space and makes counting O(N) instead of O(N²)
+    const MAX_COMBINED_LENGTH = 30;
+    const MAX_SINGLE_WORD_LENGTH = 15;
+    let shortWords: string[] = [];
+    let shortWordLengths: number[] = [];
+    let wordPairCount = 0;
+
+    // Build length buckets for O(N) pair counting: lengthBuckets[len] = count of words with that length
+    let lengthBuckets: number[] = [];
+    // Cumulative counts: wordsAtMostLength[len] = count of words with length <= len
+    let wordsAtMostLength: number[] = [];
+
+    if (useDictionary && useTwoWordCombinations && !skipWordPairs && this.wordlist.length > 0) {
+      // Filter to short words only
+      shortWords = this.wordlist.filter(w => w.length <= MAX_SINGLE_WORD_LENGTH);
+      shortWordLengths = shortWords.map(w => w.length);
+
+      // Resolve dictionary-pair resume indices now that shortWords is built
+      const pairOpts = options as { _pairResumeWord1?: string; _pairResumeWord2?: string };
+      if (pairOpts._pairResumeWord1 && pairOpts._pairResumeWord2) {
+        const idx1 = shortWords.indexOf(pairOpts._pairResumeWord1);
+        const idx2 = shortWords.indexOf(pairOpts._pairResumeWord2);
+        if (idx1 >= 0 && idx2 >= 0) {
+          wordPairStartI = idx1;
+          wordPairStartJ = idx2 + 1;
+          if (wordPairStartJ >= shortWords.length) {
+            wordPairStartI++;
+            wordPairStartJ = 0;
+          }
+        }
+      }
+
+      // Build length buckets
+      lengthBuckets = new Array(MAX_SINGLE_WORD_LENGTH + 1).fill(0);
+      for (const len of shortWordLengths) {
+        lengthBuckets[len]++;
+      }
+
+      // Build cumulative counts
+      wordsAtMostLength = new Array(MAX_COMBINED_LENGTH + 1).fill(0);
+      let cumulative = 0;
+      for (let len = 0; len <= MAX_COMBINED_LENGTH; len++) {
+        if (len <= MAX_SINGLE_WORD_LENGTH) {
+          cumulative += lengthBuckets[len];
+        }
+        wordsAtMostLength[len] = cumulative;
+      }
+
+      // Count pairs efficiently: for each word of length L, it can pair with any word of length <= (30 - L)
+      // This is O(N) instead of O(N²)
+      for (let i = wordPairStartI; i < shortWords.length; i++) {
+        const len1 = shortWordLengths[i];
+        const maxLen2 = MAX_COMBINED_LENGTH - len1;
+        const countForThisWord = wordsAtMostLength[Math.min(maxLen2, MAX_SINGLE_WORD_LENGTH)];
+
+        if (i === wordPairStartI && wordPairStartJ > 0) {
+          // Partial first row - subtract words we're skipping
+          wordPairCount += Math.max(0, countForThisWord - wordPairStartJ);
+        } else {
+          wordPairCount += countForThisWord;
+        }
+      }
+
+      totalCandidates += wordPairCount;
+    }
+
     // Add brute force candidates
     for (let l = startFromLength; l <= maxLength; l++) {
       totalCandidates += countNamesForLength(l);
@@ -358,6 +444,166 @@ export class GroupTextCracker {
       }
     }
 
+    // Phase 2.5: Two-word combinations (EXPERIMENTAL)
+    // Uses pre-filtered shortWords (words with length <= 15) for efficiency
+    // GPU-accelerated when available
+    if (useDictionary && useTwoWordCombinations && !skipWordPairs && shortWords.length > 0) {
+      const totalPairs = shortWords.length * shortWords.length;
+      const startPairIdx = wordPairStartI * shortWords.length + wordPairStartJ;
+
+      // Try GPU acceleration for word pairs
+      let useGpuForPairs = !this.useCpu;
+      if (useGpuForPairs) {
+        if (!this.gpuWordPairs) {
+          this.gpuWordPairs = new GpuWordPairs();
+          const gpuOk = await this.gpuWordPairs.init();
+          if (!gpuOk) {
+            useGpuForPairs = false;
+            this.gpuWordPairs = null;
+          }
+        }
+        if (this.gpuWordPairs) {
+          this.gpuWordPairs.uploadWords(shortWords);
+        }
+      }
+
+      if (useGpuForPairs && this.gpuWordPairs) {
+        // GPU-accelerated word pair checking
+        // Start with 1M pairs (like Python/OpenCL version) for better throughput
+        const INITIAL_PAIR_BATCH_SIZE = 1048576;  // 1M
+        const TARGET_PAIR_DISPATCH_MS = options?.gpuDispatchMs ?? 1000;
+        let pairBatchSize = INITIAL_PAIR_BATCH_SIZE;
+        let pairBatchTuned = false;
+        let pairOffset = startPairIdx;
+
+        while (pairOffset < totalPairs) {
+          if (this.abortFlag) {
+            const i = Math.floor(pairOffset / shortWords.length);
+            const j = pairOffset % shortWords.length;
+            return {
+              found: false,
+              aborted: true,
+              resumeFrom: `${shortWords[i]}+${shortWords[j]}`,
+              resumeType: 'dictionary-pair',
+            };
+          }
+
+          const batchSize = Math.min(pairBatchSize, totalPairs - pairOffset);
+          const dispatchStart = performance.now();
+
+          const matches = await this.gpuWordPairs.runBatch(
+            targetHashByte,
+            pairOffset,
+            batchSize,
+            ciphertext,
+            cipherMac,
+          );
+
+          const dispatchTime = performance.now() - dispatchStart;
+          totalChecked += batchSize;
+
+          // Auto-tune batch size
+          if (!pairBatchTuned && batchSize >= INITIAL_PAIR_BATCH_SIZE && dispatchTime > 0) {
+            const scaleFactor = TARGET_PAIR_DISPATCH_MS / dispatchTime;
+            const optimalBatchSize = Math.round(batchSize * scaleFactor);
+            const rounded = Math.pow(
+              2,
+              Math.round(Math.log2(Math.max(INITIAL_PAIR_BATCH_SIZE, optimalBatchSize))),
+            );
+            pairBatchSize = Math.max(INITIAL_PAIR_BATCH_SIZE, rounded);
+            pairBatchTuned = true;
+          }
+
+          // Check matches
+          for (const [i, j] of matches) {
+            const word1 = shortWords[i];
+            const word2 = shortWords[j];
+            const combined = word1 + word2;
+            const key = deriveKeyFromRoomName('#' + combined);
+            const result = verifyMacAndFilters(key);
+            if (result.valid) {
+              return {
+                found: true,
+                roomName: combined,
+                key,
+                decryptedMessage: result.message,
+                resumeFrom: `${word1}+${word2}`,
+                resumeType: 'dictionary-pair',
+              };
+            }
+          }
+
+          pairOffset += batchSize;
+
+          // Progress update
+          const now = performance.now();
+          if (now - lastProgressUpdate >= 200) {
+            const i = Math.floor(Math.min(pairOffset, totalPairs - 1) / shortWords.length);
+            const j = Math.min(pairOffset, totalPairs - 1) % shortWords.length;
+            reportProgress('wordlist-pairs', 0, `${shortWords[i]}+${shortWords[j]}`);
+            lastProgressUpdate = now;
+            await new Promise((resolve) => setTimeout(resolve, 0));
+          }
+        }
+      } else {
+        // CPU fallback for word pairs
+        for (let i = wordPairStartI; i < shortWords.length; i++) {
+          const word1 = shortWords[i];
+          const len1 = shortWordLengths[i];
+          const maxLen2 = MAX_COMBINED_LENGTH - len1;
+
+          const startJ = i === wordPairStartI ? wordPairStartJ : 0;
+
+          for (let j = startJ; j < shortWords.length; j++) {
+            if (this.abortFlag) {
+              return {
+                found: false,
+                aborted: true,
+                resumeFrom: `${word1}+${shortWords[j]}`,
+                resumeType: 'dictionary-pair',
+              };
+            }
+
+            const len2 = shortWordLengths[j];
+            if (len2 > maxLen2) continue;
+
+            const word2 = shortWords[j];
+            const combined = word1 + word2;
+
+            // Validate combined name (check for consecutive dashes at join point)
+            if (!isValidRoomName(combined)) continue;
+
+            const key = deriveKeyFromRoomName('#' + combined);
+            const pairChannelHash = getChannelHash(key);
+
+            if (parseInt(pairChannelHash, 16) === targetHashByte) {
+              const result = verifyMacAndFilters(key);
+              if (result.valid) {
+                return {
+                  found: true,
+                  roomName: combined,
+                  key,
+                  decryptedMessage: result.message,
+                  resumeFrom: `${word1}+${word2}`,
+                  resumeType: 'dictionary-pair',
+                };
+              }
+            }
+
+            totalChecked++;
+
+            // Progress update
+            const now = performance.now();
+            if (now - lastProgressUpdate >= 200) {
+              reportProgress('wordlist-pairs', len1 + len2, `${word1}+${word2}`);
+              lastProgressUpdate = now;
+              await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+          }
+        }
+      }
+    }
+
     // Phase 3: Brute force (GPU or CPU)
     // Use smaller batches for CPU since it's much slower
     const INITIAL_BATCH_SIZE = this.useCpu ? 1024 : 32768;
@@ -480,6 +726,10 @@ export class GroupTextCracker {
     if (this.gpuInstance) {
       this.gpuInstance.destroy();
       this.gpuInstance = null;
+    }
+    if (this.gpuWordPairs) {
+      this.gpuWordPairs.destroy();
+      this.gpuWordPairs = null;
     }
     if (this.cpuInstance) {
       this.cpuInstance.destroy();
