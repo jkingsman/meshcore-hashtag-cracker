@@ -1,6 +1,6 @@
 // WebGPU-accelerated brute force key cracking for MeshCore packets
 
-import { indexToRoomName, countNamesForLength } from './core';
+import { indexToRoomName, countNamesForLength } from './core.js';
 
 export interface GpuBruteForceResult {
   found: boolean;

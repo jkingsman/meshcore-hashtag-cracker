@@ -1,8 +1,8 @@
 // Core logic for MeshCore packet cracker - pure functions
 
-import SHA256 from 'crypto-js/sha256';
-import HmacSHA256 from 'crypto-js/hmac-sha256';
-import Hex from 'crypto-js/enc-hex';
+import SHA256 from 'crypto-js/sha256.js';
+import HmacSHA256 from 'crypto-js/hmac-sha256.js';
+import Hex from 'crypto-js/enc-hex.js';
 
 // Room name character set
 export const CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -30,6 +30,7 @@ export function roomNameToIndex(name: string): { length: number; index: number }
   let multiplier = 1;
 
   // Process from left to right (first char is LSB, matching indexToRoomName)
+  let prevWasDash = false;
   for (let i = 0; i < length; i++) {
     const c = name[i];
     const charIdx = CHARS_WITH_DASH.indexOf(c);
@@ -40,11 +41,18 @@ export function roomNameToIndex(name: string): { length: number; index: number }
     const isFirst = i === 0;
     const isLast = i === length - 1;
     const charCount = isFirst || isLast ? 36 : 37;
+    const isDash = charIdx === 36;
 
     // Dash not allowed at start/end
-    if ((isFirst || isLast) && charIdx === 36) {
+    if ((isFirst || isLast) && isDash) {
       return null;
     }
+
+    // No consecutive dashes
+    if (isDash && prevWasDash) {
+      return null;
+    }
+    prevWasDash = isDash;
 
     index += charIdx * multiplier;
     multiplier *= charCount;
@@ -113,6 +121,18 @@ export function verifyMac(ciphertext: string, cipherMac: string, keyHex: string)
   const hmac = HmacSHA256(Hex.parse(ciphertext), Hex.parse(paddedKey));
   const computed = hmac.toString(Hex).substring(0, 4).toLowerCase();
   return computed === cipherMac.toLowerCase();
+}
+
+/**
+ * Total index space for a given length (including invalid consecutive-dash indices).
+ * This is the full mixed-radix space: 36 * 37^(len-2) * 36 for len >= 3.
+ * Use this as the brute-force iteration bound (indexToRoomName returns null for holes).
+ */
+export function indexSpaceForLength(len: number): number {
+  if (len <= 0) return 0;
+  if (len === 1) return CHARS_LEN;
+  if (len === 2) return CHARS_LEN * CHARS_LEN;
+  return CHARS_LEN * CHARS_LEN * Math.pow(CHARS_LEN + 1, len - 2);
 }
 
 /**

@@ -28,7 +28,7 @@
  */
 
 // Main cracker class
-export { GroupTextCracker } from './cracker';
+export { GroupTextCracker } from './cracker.js';
 
 // Types
 export type {
@@ -37,7 +37,7 @@ export type {
   ProgressReport,
   ProgressCallback,
   DecodedPacket,
-} from './types';
+} from './types.js';
 
 // Utility exports for advanced usage
 export {
@@ -50,9 +50,10 @@ export {
   indexToRoomName,
   roomNameToIndex,
   countNamesForLength,
+  indexSpaceForLength,
   PUBLIC_ROOM_NAME,
   PUBLIC_KEY,
   DEFAULT_VALID_SECONDS,
-} from './core';
+} from './core.js';
 
-export { isWebGpuSupported } from './gpu-bruteforce';
+export { isWebGpuSupported } from './gpu-bruteforce.js';

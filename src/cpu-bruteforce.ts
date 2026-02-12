@@ -6,7 +6,7 @@ import {
   deriveKeyFromRoomName,
   getChannelHash,
   verifyMac,
-} from './core';
+} from './core.js';
 
 /**
  * CPU-based brute force implementation.

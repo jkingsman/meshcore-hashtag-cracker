@@ -6,9 +6,9 @@
  */
 
 import { MeshCorePacketDecoder, ChannelCrypto } from '@michaelhart/meshcore-decoder';
-import { GpuBruteForce, isWebGpuSupported } from './gpu-bruteforce';
-import { GpuWordPairs } from './gpu-wordpairs';
-import { CpuBruteForce } from './cpu-bruteforce';
+import { GpuBruteForce, isWebGpuSupported } from './gpu-bruteforce.js';
+import { GpuWordPairs } from './gpu-wordpairs.js';
+import { CpuBruteForce } from './cpu-bruteforce.js';
 import {
   PUBLIC_ROOM_NAME,
   PUBLIC_KEY,
@@ -19,10 +19,11 @@ import {
   getChannelHash,
   verifyMac,
   countNamesForLength,
+  indexSpaceForLength,
   isTimestampValid,
   isValidUtf8,
-} from './core';
-import type { CrackOptions, CrackResult, ProgressReport, ProgressCallback, DecodedPacket } from './types';
+} from './core.js';
+import type { CrackOptions, CrackResult, ProgressReport, ProgressCallback, DecodedPacket } from './types.js';
 
 // Valid room name characters (for wordlist filtering)
 const VALID_CHARS = /^[a-z0-9-]+$/;
@@ -235,7 +236,7 @@ export class GroupTextCracker {
         if (pos) {
           startFromLength = Math.max(startingLength, pos.length);
           startFromOffset = pos.index + 1; // Start after the given position
-          if (startFromOffset >= countNamesForLength(startFromLength)) {
+          if (startFromOffset >= indexSpaceForLength(startFromLength)) {
             startFromLength++;
             startFromOffset = 0;
           }
@@ -317,9 +318,9 @@ export class GroupTextCracker {
       totalCandidates += wordPairCount;
     }
 
-    // Add brute force candidates
+    // Add brute force candidates (use full index space to cover all valid names)
     for (let l = startFromLength; l <= maxLength; l++) {
-      totalCandidates += countNamesForLength(l);
+      totalCandidates += indexSpaceForLength(l);
     }
     totalCandidates -= startFromOffset;
 
@@ -401,16 +402,23 @@ export class GroupTextCracker {
       }
     }
 
+    // Track last processed position for abort/resume (bug #2 fix).
+    // On abort, we return this so resume doesn't skip an untested candidate.
+    let lastResumeFrom: string | undefined;
+    let lastResumeType: CrackResult['resumeType'];
+
+    const abortResult = (): CrackResult => ({
+      found: false,
+      aborted: true,
+      resumeFrom: lastResumeFrom,
+      resumeType: lastResumeType,
+    });
+
     // Phase 2: Dictionary attack
     if (useDictionary && !skipDictionary && this.wordlist.length > 0) {
       for (let i = dictionaryStartIndex; i < this.wordlist.length; i++) {
         if (this.abortFlag) {
-          return {
-            found: false,
-            aborted: true,
-            resumeFrom: this.wordlist[i],
-            resumeType: 'dictionary',
-          };
+          return abortResult();
         }
 
         const word = this.wordlist[i];
@@ -433,6 +441,8 @@ export class GroupTextCracker {
         }
 
         totalChecked++;
+        lastResumeFrom = word;
+        lastResumeType = 'dictionary';
 
         // Progress update
         const now = performance.now();
@@ -481,14 +491,7 @@ export class GroupTextCracker {
 
         while (pairOffset < totalPairs) {
           if (this.abortFlag) {
-            const i = Math.floor(pairOffset / shortWords.length);
-            const j = pairOffset % shortWords.length;
-            return {
-              found: false,
-              aborted: true,
-              resumeFrom: `${shortWords[i]}+${shortWords[j]}`,
-              resumeType: 'dictionary-pair',
-            };
+            return abortResult();
           }
 
           const batchSize = Math.min(pairBatchSize, totalPairs - pairOffset);
@@ -538,6 +541,15 @@ export class GroupTextCracker {
 
           pairOffset += batchSize;
 
+          // Update resume position to end of processed batch
+          const lastPairIdx = pairOffset - 1;
+          const li = Math.floor(lastPairIdx / shortWords.length);
+          const lj = lastPairIdx % shortWords.length;
+          if (li < shortWords.length) {
+            lastResumeFrom = `${shortWords[li]}+${shortWords[lj]}`;
+            lastResumeType = 'dictionary-pair';
+          }
+
           // Progress update
           const now = performance.now();
           if (now - lastProgressUpdate >= 200) {
@@ -559,12 +571,7 @@ export class GroupTextCracker {
 
           for (let j = startJ; j < shortWords.length; j++) {
             if (this.abortFlag) {
-              return {
-                found: false,
-                aborted: true,
-                resumeFrom: `${word1}+${shortWords[j]}`,
-                resumeType: 'dictionary-pair',
-              };
+              return abortResult();
             }
 
             const len2 = shortWordLengths[j];
@@ -594,6 +601,8 @@ export class GroupTextCracker {
             }
 
             totalChecked++;
+            lastResumeFrom = `${word1}+${word2}`;
+            lastResumeType = 'dictionary-pair';
 
             // Progress update
             const now = performance.now();
@@ -608,7 +617,7 @@ export class GroupTextCracker {
     }
 
     // Phase 3: Brute force (GPU or CPU)
-    // Use smaller batches for CPU since it's much slower
+    // Use full index space to cover all valid names including dashed ones (bug #1 fix)
     const INITIAL_BATCH_SIZE = this.useCpu ? 1024 : 32768;
     // WebGPU limits dispatchWorkgroups to 65535 per dimension
     // With workgroup_size(256) and 32 candidates/thread: 65535 * 256 * 32 = 536,870,880
@@ -619,27 +628,15 @@ export class GroupTextCracker {
 
     for (let length = startFromLength; length <= maxLength; length++) {
       if (this.abortFlag) {
-        const resumePos = indexToRoomName(length, 0);
-        return {
-          found: false,
-          aborted: true,
-          resumeFrom: resumePos || undefined,
-          resumeType: 'bruteforce',
-        };
+        return abortResult();
       }
 
-      const totalForLength = countNamesForLength(length);
+      const totalForLength = indexSpaceForLength(length);
       let offset = length === startFromLength ? startFromOffset : 0;
 
       while (offset < totalForLength) {
         if (this.abortFlag) {
-          const resumePos = indexToRoomName(length, offset);
-          return {
-            found: false,
-            aborted: true,
-            resumeFrom: resumePos || undefined,
-            resumeType: 'bruteforce',
-          };
+          return abortResult();
         }
 
         const batchSize = Math.min(currentBatchSize, totalForLength - offset);
@@ -704,6 +701,14 @@ export class GroupTextCracker {
 
         offset += batchSize;
 
+        // Update resume position to last index of processed batch
+        const endIdx = Math.min(offset - 1, totalForLength - 1);
+        const endName = indexToRoomName(length, endIdx);
+        if (endName) {
+          lastResumeFrom = endName;
+          lastResumeType = 'bruteforce';
+        }
+
         // Progress update
         const now = performance.now();
         if (now - lastProgressUpdate >= 200) {
@@ -716,11 +721,10 @@ export class GroupTextCracker {
     }
 
     // Not found
-    const lastPos = indexToRoomName(maxLength, countNamesForLength(maxLength) - 1);
     return {
       found: false,
-      resumeFrom: lastPos || undefined,
-      resumeType: 'bruteforce',
+      resumeFrom: lastResumeFrom,
+      resumeType: lastResumeType,
     };
   }
 

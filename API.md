@@ -302,7 +302,7 @@ import { ENGLISH_WORDLIST } from 'meshcore-hashtag-cracker/wordlist';
 cracker.setWordlist(ENGLISH_WORDLIST);
 ```
 
-- **370,105 words** - Filtered to valid room name format (a-z, 0-9, dashes)
+- **481,535 words** - Filtered to valid room name format (a-z, 0-9, dashes)
 - **Tree-shakeable** - Only included in your bundle if you import it
 - **~4MB** - Consider lazy-loading for browser apps if bundle size is a concern
 
@@ -320,7 +320,8 @@ import {
   hasColon,               // Check if text contains colon
   indexToRoomName,        // Convert index to room name
   roomNameToIndex,        // Convert room name to index
-  countNamesForLength,    // Count names for a length
+  countNamesForLength,    // Count valid names for a length
+  indexSpaceForLength,    // Full index space size (brute force iteration bound)
   isWebGpuSupported,      // Check WebGPU support
   PUBLIC_ROOM_NAME,       // "[[public room]]"
   PUBLIC_KEY,             // Public room key

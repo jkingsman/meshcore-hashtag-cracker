@@ -11,7 +11,7 @@ This is an LLM-developed library and has borne out its correctness in various ap
 ## Features
 
 - WebGPU-accelerated brute force (100M+ keys/second on modern GPUs)
-- Dictionary attack support with built-in English wordlist (370k words)
+- Dictionary attack support with built-in English wordlist (482k words)
 - Configurable filters (sender, UTF-8, timestamp) to handle MAC collisions with sanity checks
 - Progress callbacks with ETA
 - Resume support for interrupted searches
@@ -52,7 +52,7 @@ For direct browser usage without a bundler, download [`browser/meshcore_cracker.
 
 ```typescript
 import { GroupTextCracker } from 'meshcore-hashtag-cracker';
-// Built-in 370k word English dictionary (tree-shakeable, ~4MB)
+// Built-in 482k word English dictionary (tree-shakeable, ~4MB)
 // Dictionary is checked BEFORE GPU brute force - a room like #football
 // takes hours to brute force but milliseconds via dictionary lookup
 import { ENGLISH_WORDLIST } from 'meshcore-hashtag-cracker/wordlist';
@@ -98,7 +98,7 @@ const result = await cracker.crack(packetHex, {
   validSeconds: 2592000,  // Timestamp window in seconds (default: 30 days)
   forceCpu: false,        // Force CPU mode, skip GPU (default: false)
   startFrom: 'abc',       // Resume after this position (optional)
-  startFromType: 'bruteforce', // 'dictionary' or 'bruteforce' (default: 'bruteforce')
+  startFromType: 'bruteforce', // 'dictionary', 'dictionary-pair', or 'bruteforce' (default: 'bruteforce')
 });
 ```
 
