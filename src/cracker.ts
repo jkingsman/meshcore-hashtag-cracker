@@ -471,6 +471,9 @@ export class GroupTextCracker {
         // GPU-accelerated word pair checking
         // Start with 1M pairs (like Python/OpenCL version) for better throughput
         const INITIAL_PAIR_BATCH_SIZE = 1048576;  // 1M
+        // WebGPU limits dispatchWorkgroups to 65535 per dimension
+        // With workgroup_size(256) and 32 pairs/thread: 65535 * 256 * 32 = 536,870,880
+        const MAX_PAIR_BATCH_SIZE = 65535 * 256 * 32;
         const TARGET_PAIR_DISPATCH_MS = options?.gpuDispatchMs ?? 1000;
         let pairBatchSize = INITIAL_PAIR_BATCH_SIZE;
         let pairBatchTuned = false;
@@ -510,7 +513,7 @@ export class GroupTextCracker {
               2,
               Math.round(Math.log2(Math.max(INITIAL_PAIR_BATCH_SIZE, optimalBatchSize))),
             );
-            pairBatchSize = Math.max(INITIAL_PAIR_BATCH_SIZE, rounded);
+            pairBatchSize = Math.min(Math.max(INITIAL_PAIR_BATCH_SIZE, rounded), MAX_PAIR_BATCH_SIZE);
             pairBatchTuned = true;
           }
 
@@ -607,6 +610,9 @@ export class GroupTextCracker {
     // Phase 3: Brute force (GPU or CPU)
     // Use smaller batches for CPU since it's much slower
     const INITIAL_BATCH_SIZE = this.useCpu ? 1024 : 32768;
+    // WebGPU limits dispatchWorkgroups to 65535 per dimension
+    // With workgroup_size(256) and 32 candidates/thread: 65535 * 256 * 32 = 536,870,880
+    const MAX_BATCH_SIZE = 65535 * 256 * 32;
     const TARGET_DISPATCH_MS = options?.gpuDispatchMs ?? 1000;
     let currentBatchSize = INITIAL_BATCH_SIZE;
     let batchSizeTuned = false;
@@ -672,7 +678,7 @@ export class GroupTextCracker {
             2,
             Math.round(Math.log2(Math.max(INITIAL_BATCH_SIZE, optimalBatchSize))),
           );
-          currentBatchSize = Math.max(INITIAL_BATCH_SIZE, rounded);
+          currentBatchSize = Math.min(Math.max(INITIAL_BATCH_SIZE, rounded), MAX_BATCH_SIZE);
           batchSizeTuned = true;
         }
 
