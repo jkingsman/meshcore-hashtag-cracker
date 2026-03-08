@@ -19,6 +19,7 @@
   },
   "files": [
     "dist",
+    "lib",
     "browser",
     "README.md",
     "LICENSE.md"
@@ -41,7 +42,7 @@
     "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
-    "@michaelhart/meshcore-decoder": "github:jkingsman/meshcore-decoder-multibyte",
+    "@michaelhart/meshcore-decoder": "file:./lib/meshcore-decoder",
     "crypto-js": "^4.2.0"
   },
   "devDependencies": {
