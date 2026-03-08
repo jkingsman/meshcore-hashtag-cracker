@@ -485,6 +485,123 @@ describe('GroupTextCracker', () => {
 
       cracker.destroy();
     });
+
+    it('should decode multi-byte hop packet (3-byte hashes, 3 hops)', async () => {
+      // Room #bot, sender "Roy B V4", message "P"
+      // path_len=0x83: hashSize=3, hashCount=3, pathByteLen=9
+      const multihopPacket3byte = '15833fa002860ccae0eed9ca78b9ab0775d477c1f6490a398bf4edc75240';
+      const cracker = new GroupTextCracker();
+      const decoded = await cracker.decodePacket(multihopPacket3byte);
+
+      expect(decoded).not.toBeNull();
+      expect(decoded!.isGroupText).toBe(true);
+      expect(decoded!.channelHash).toBe('ca');
+      expect(decoded!.cipherMac).toBe('78b9');
+      expect(decoded!.ciphertext).toBe('ab0775d477c1f6490a398bf4edc75240');
+
+      cracker.destroy();
+    });
+
+    it('should decode multi-byte hop packet (2-byte hashes, 0 hops)', async () => {
+      // Room #bot, sender "Howl 👾", message "prefix 0101"
+      // path_len=0x40: hashSize=2, hashCount=0, pathByteLen=0
+      const multihopPacket2byte = '1540cab3b15626481a5ba64247ab25766e410b026e0678a32da9f0c3946fae5b714cab170f';
+      const cracker = new GroupTextCracker();
+      const decoded = await cracker.decodePacket(multihopPacket2byte);
+
+      expect(decoded).not.toBeNull();
+      expect(decoded!.isGroupText).toBe(true);
+      expect(decoded!.channelHash).toBe('ca');
+      expect(decoded!.cipherMac).toBe('b3b1');
+      expect(decoded!.ciphertext).toBe('5626481a5ba64247ab25766e410b026e0678a32da9f0c3946fae5b714cab170f');
+
+      cracker.destroy();
+    });
+  });
+
+  describe('multi-byte hop packets', () => {
+    // Real-world packets from #bot with multi-byte path hashes (MeshCore v1.11+)
+    // These use the new path_len encoding: bits 7-6 = hash size, bits 5-0 = hash count
+
+    // Packet with 3-byte hashes, 3 hops (path_len=0x83)
+    // Sender: "Roy B V4", message: "P"
+    const multihopPacket3byte = '15833fa002860ccae0eed9ca78b9ab0775d477c1f6490a398bf4edc75240';
+
+    // Packet with 2-byte hashes, 0 hops (path_len=0x40)
+    // Sender: "Howl 👾", message: "prefix 0101"
+    const multihopPacket2byte = '1540cab3b15626481a5ba64247ab25766e410b026e0678a32da9f0c3946fae5b714cab170f';
+
+    it('should crack 3-byte-hop packet via dictionary', async () => {
+      const cracker = new GroupTextCracker();
+      cracker.setWordlist(['bot']);
+
+      const result = await cracker.crack(multihopPacket3byte, {
+        forceCpu: true,
+        maxLength: 3,
+        useTimestampFilter: false,
+      });
+
+      expect(result.found).toBe(true);
+      expect(result.roomName).toBe('bot');
+      expect(result.key).toBe('eb50a1bcb3e4e5d7bf69a57c9dada211');
+      expect(result.decryptedMessage).toContain('Roy B V4');
+      expect(result.decryptedMessage).toContain('P');
+
+      cracker.destroy();
+    });
+
+    it('should crack 2-byte-hop packet via dictionary', async () => {
+      const cracker = new GroupTextCracker();
+      cracker.setWordlist(['bot']);
+
+      const result = await cracker.crack(multihopPacket2byte, {
+        forceCpu: true,
+        maxLength: 3,
+        useTimestampFilter: false,
+      });
+
+      expect(result.found).toBe(true);
+      expect(result.roomName).toBe('bot');
+      expect(result.key).toBe('eb50a1bcb3e4e5d7bf69a57c9dada211');
+      expect(result.decryptedMessage).toContain('Howl');
+      expect(result.decryptedMessage).toContain('prefix 0101');
+
+      cracker.destroy();
+    });
+
+    it('should crack 3-byte-hop packet via brute force', async () => {
+      const cracker = new GroupTextCracker();
+
+      const result = await cracker.crack(multihopPacket3byte, {
+        forceCpu: true,
+        maxLength: 3,
+        useDictionary: false,
+        useTimestampFilter: false,
+      });
+
+      expect(result.found).toBe(true);
+      expect(result.roomName).toBe('bot');
+      expect(result.resumeType).toBe('bruteforce');
+
+      cracker.destroy();
+    });
+
+    it('should crack 2-byte-hop packet via brute force', async () => {
+      const cracker = new GroupTextCracker();
+
+      const result = await cracker.crack(multihopPacket2byte, {
+        forceCpu: true,
+        maxLength: 3,
+        useDictionary: false,
+        useTimestampFilter: false,
+      });
+
+      expect(result.found).toBe(true);
+      expect(result.roomName).toBe('bot');
+      expect(result.resumeType).toBe('bruteforce');
+
+      cracker.destroy();
+    });
   });
 
   describe('two-word combinations (experimental)', () => {

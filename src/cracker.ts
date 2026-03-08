@@ -5,7 +5,7 @@
  * correct encryption key is found.
  */
 
-import { MeshCorePacketDecoder, ChannelCrypto } from '@michaelhart/meshcore-decoder';
+import { ChannelCrypto } from '@michaelhart/meshcore-decoder';
 import { GpuBruteForce, isWebGpuSupported } from './gpu-bruteforce.js';
 import { GpuWordPairs } from './gpu-wordpairs.js';
 import { CpuBruteForce } from './cpu-bruteforce.js';
@@ -103,33 +103,74 @@ export class GroupTextCracker {
 
   /**
    * Decode a packet and extract the information needed for cracking.
+   * Parses the MeshCore wire format directly to support both single-byte
+   * and multi-byte path hops (v1.11+ path_len encoding).
    *
    * @param packetHex - The packet data as a hex string
    * @returns Decoded packet info or null if not a GroupText packet
    */
-  async decodePacket(packetHex: string): Promise<DecodedPacket | null> {
+  decodePacket(packetHex: string): DecodedPacket | null {
     const cleanHex = packetHex.trim().replace(/\s+/g, '').replace(/^0x/i, '');
 
-    if (!cleanHex || !/^[0-9a-fA-F]+$/.test(cleanHex)) {
+    if (!cleanHex || cleanHex.length < 8 || !/^[0-9a-fA-F]+$/.test(cleanHex)) {
       return null;
     }
 
     try {
-      const decoded = await MeshCorePacketDecoder.decodeWithVerification(cleanHex, {});
-      const payload = decoded.payload?.decoded as {
-        channelHash?: string;
-        ciphertext?: string;
-        cipherMac?: string;
-      } | null;
+      const bytes = new Uint8Array(cleanHex.length / 2);
+      for (let i = 0; i < bytes.length; i++) {
+        bytes[i] = parseInt(cleanHex.substring(i * 2, i * 2 + 2), 16);
+      }
 
-      if (!payload?.channelHash || !payload?.ciphertext || !payload?.cipherMac) {
-        return null;
+      let offset = 0;
+
+      // Header byte: bits 0-1 = route type, bits 2-5 = payload type
+      const header = bytes[offset++];
+      const routeType = header & 0x03;
+      const payloadType = (header >> 2) & 0x0F;
+
+      // Must be GroupText (payload type 5)
+      if (payloadType !== 5) return null;
+
+      // Skip transport codes (4 bytes) for TransportFlood(0) and TransportDirect(3)
+      if (routeType === 0 || routeType === 3) {
+        offset += 4;
+      }
+
+      if (offset >= bytes.length) return null;
+
+      // Parse path_len with multi-byte hop support (MeshCore v1.11+)
+      // Bits 7-6: hash size indicator → (path_len >> 6) + 1 = bytes per hop (1-3)
+      // Bits 5-0: hash count → path_len & 63 = number of hops (0-63)
+      // Actual path bytes = hashCount * hashSize
+      const pathLenByte = bytes[offset++];
+      const hashSize = (pathLenByte >> 6) + 1;
+      if (hashSize === 4) return null; // Reserved, invalid
+      const hashCount = pathLenByte & 0x3F;
+      const pathByteLen = hashCount * hashSize;
+
+      offset += pathByteLen;
+
+      // Need at least channelHash(1) + cipherMac(2) + ciphertext(1+)
+      if (offset + 4 > bytes.length) return null;
+
+      // Extract GroupText payload fields
+      const channelHash = bytes[offset].toString(16).padStart(2, '0');
+      offset += 1;
+
+      const cipherMac = bytes[offset].toString(16).padStart(2, '0') +
+                         bytes[offset + 1].toString(16).padStart(2, '0');
+      offset += 2;
+
+      let ciphertext = '';
+      for (let i = offset; i < bytes.length; i++) {
+        ciphertext += bytes[i].toString(16).padStart(2, '0');
       }
 
       return {
-        channelHash: payload.channelHash,
-        ciphertext: payload.ciphertext,
-        cipherMac: payload.cipherMac,
+        channelHash,
+        ciphertext,
+        cipherMac,
         isGroupText: true,
       };
     } catch {
