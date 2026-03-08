@@ -41,7 +41,7 @@
     "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
-    "@michaelhart/meshcore-decoder": "^0.2.7",
+    "@michaelhart/meshcore-decoder": "github:jkingsman/meshcore-decoder-multibyte",
     "crypto-js": "^4.2.0"
   },
   "devDependencies": {
